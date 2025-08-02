@@ -1,0 +1,293 @@
+openapi: 3.0.3
+info:
+  title: OAuth 2.0 Authentication Microservice
+  description: |
+    A robust, scalable, and secure Authentication Microservice built in Go. 
+    It implements the OAuth 2.0 framework and follows Clean Architecture principles 
+    to provide a centralized identity and access management solution.
+  version: 1.0.0
+  contact:
+    name: Auth Service Team
+    email: auth-team@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Development server
+  - url: https://auth.example.com
+    description: Production server
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns the health status of the service
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  service:
+                    type: string
+                    example: auth-service
+
+  /auth/register:
+    post:
+      summary: Register a new user
+      description: Creates a new user account with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                password:
+                  type: string
+                  minLength: 8
+                  example: password123
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: string
+                    example: user_123
+                  email:
+                    type: string
+                    example: user@example.com
+        '400':
+          description: Bad request (invalid email, weak password, etc.)
+        '409':
+          description: User already exists
+
+  /oauth/authorize:
+    get:
+      summary: OAuth 2.0 authorization endpoint
+      description: Initiates the authorization code flow
+      parameters:
+        - name: client_id
+          in: query
+          required: true
+          schema:
+            type: string
+          example: web-app-client
+        - name: redirect_uri
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+          example: http://localhost:3000/callback
+        - name: response_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [code]
+          example: code
+        - name: scope
+          in: query
+          schema:
+            type: string
+          example: read write
+        - name: state
+          in: query
+          schema:
+            type: string
+          example: random-state-string
+        - name: code_challenge
+          in: query
+          schema:
+            type: string
+          description: PKCE code challenge
+        - name: code_challenge_method
+          in: query
+          schema:
+            type: string
+            enum: [plain, S256]
+          description: PKCE code challenge method
+      responses:
+        '302':
+          description: Redirect to client with authorization code
+        '400':
+          description: Invalid request parameters
+        '401':
+          description: User not authenticated
+
+  /oauth/token:
+    post:
+      summary: OAuth 2.0 token endpoint
+      description: Exchange authorization code, refresh token, or credentials for access token
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - grant_type
+              properties:
+                grant_type:
+                  type: string
+                  enum: [authorization_code, refresh_token, client_credentials, password]
+                client_id:
+                  type: string
+                client_secret:
+                  type: string
+                code:
+                  type: string
+                  description: Required for authorization_code grant
+                redirect_uri:
+                  type: string
+                  description: Required for authorization_code grant
+                code_verifier:
+                  type: string
+                  description: Required for PKCE
+                refresh_token:
+                  type: string
+                  description: Required for refresh_token grant
+                username:
+                  type: string
+                  description: Required for password grant
+                password:
+                  type: string
+                  description: Required for password grant
+                scope:
+                  type: string
+      responses:
+        '200':
+          description: Token issued successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  token_type:
+                    type: string
+                    example: Bearer
+                  expires_in:
+                    type: integer
+                    example: 900
+                  refresh_token:
+                    type: string
+                  scope:
+                    type: string
+        '400':
+          description: Invalid request
+        '401':
+          description: Invalid client credentials
+
+  /oauth/revoke:
+    post:
+      summary: OAuth 2.0 token revocation endpoint
+      description: Revoke a refresh token
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - token
+              properties:
+                token:
+                  type: string
+                  description: The token to revoke
+                token_type_hint:
+                  type: string
+                  enum: [refresh_token, access_token]
+                client_id:
+                  type: string
+                client_secret:
+                  type: string
+      responses:
+        '200':
+          description: Token revoked successfully
+        '400':
+          description: Invalid request
+        '401':
+          description: Invalid client credentials
+
+  /.well-known/jwks.json:
+    get:
+      summary: JSON Web Key Set endpoint
+      description: Returns the public keys for JWT verification
+      responses:
+        '200':
+          description: JWKS response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        kty:
+                          type: string
+                          example: RSA
+                        use:
+                          type: string
+                          example: sig
+                        kid:
+                          type: string
+                          example: "1"
+                        alg:
+                          type: string
+                          example: RS256
+                        n:
+                          type: string
+                          description: RSA public key modulus
+                        e:
+                          type: string
+                          description: RSA public key exponent
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    BasicAuth:
+      type: http
+      scheme: basic
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        error_description:
+          type: string
+        error_uri:
+          type: string
+          format: uri
+
+security:
+  - BearerAuth: []
+  - BasicAuth: []

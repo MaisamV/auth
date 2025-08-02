@@ -1,0 +1,30 @@
+# OAuth 2.0 Authentication Microservice Configuration
+
+# Server configuration
+port: "8080"
+
+# Database configuration
+database_url: "postgres://user:password@localhost:5432/authdb?sslmode=disable"
+
+# Redis configuration
+redis_url: "redis://localhost:6379"
+
+# JWT configuration
+issuer: "https://auth.example.com"
+
+# Security settings
+bcrypt_cost: 12
+
+# Token expiration settings
+access_token_expiry: "15m"  # 15 minutes
+refresh_token_expiry: "720h" # 30 days
+authorization_code_expiry: "10m" # 10 minutes
+
+# Rate limiting (future implementation)
+rate_limit:
+  requests_per_minute: 60
+  burst: 10
+
+# Logging
+log_level: "info"
+log_format: "json"
