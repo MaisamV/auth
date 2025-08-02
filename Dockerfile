@@ -37,6 +37,9 @@ COPY --from=builder /app/main .
 # Copy configuration files
 COPY --from=builder /app/configs ./configs
 
+# Copy API specification
+COPY --from=builder /app/api ./api
+
 # Change ownership to appuser
 RUN chown -R appuser:appuser /app
 

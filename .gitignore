@@ -3,3 +3,5 @@
 *.exe
 /resources/image
 /resources/image/*
+/bin
+/bin/*
