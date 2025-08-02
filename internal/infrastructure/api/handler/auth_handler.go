@@ -185,11 +185,12 @@ func (h *AuthHandler) JWKS(w http.ResponseWriter, r *http.Request) {
 	jwks := map[string]interface{}{
 		"keys": []map[string]interface{}{
 			{
-				"kty": "RSA",
+				"kty": "EC",
 				"use": "sig",
 				"kid": "1",
-				"alg": "RS256",
-				// In a real implementation, include the actual public key components (n, e)
+				"alg": "ES256",
+				"crv": "P-256",
+				// In a real implementation, include the actual public key components (x, y)
 			},
 		},
 	}

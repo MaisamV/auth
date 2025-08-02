@@ -1,8 +1,8 @@
 package services
 
 import (
+	"crypto/ecdsa"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
@@ -15,8 +15,8 @@ import (
 
 // JWTTokenService implements the TokenService interface using JWT
 type JWTTokenService struct {
-	privateKey *rsa.PrivateKey
-	publicKey  *rsa.PublicKey
+	privateKey *ecdsa.PrivateKey
+	publicKey  *ecdsa.PublicKey
 	issuer     string
 }
 
@@ -28,19 +28,24 @@ func NewJWTTokenService(privateKeyPEM, issuer string) (service.TokenService, err
 		return nil, fmt.Errorf("failed to decode PEM block")
 	}
 
-	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	// Try PKCS8 format first (recommended for ECDSA)
+	parsedKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {
-		// Try PKCS8 format
-		parsedKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+		// Try EC private key format
+		privateKey, err := x509.ParseECPrivateKey(block.Bytes)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse private key: %w", err)
 		}
+		return &JWTTokenService{
+			privateKey: privateKey,
+			publicKey:  &privateKey.PublicKey,
+			issuer:     issuer,
+		}, nil
+	}
 
-		var ok bool
-		privateKey, ok = parsedKey.(*rsa.PrivateKey)
-		if !ok {
-			return nil, fmt.Errorf("private key is not RSA")
-		}
+	privateKey, ok := parsedKey.(*ecdsa.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("private key is not ECDSA")
 	}
 
 	return &JWTTokenService{
@@ -73,7 +78,7 @@ func (s *JWTTokenService) GenerateAccessToken(userID, clientID string, scopes []
 	}
 
 	// Create token
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
 
 	// Sign token
 	tokenString, err := token.SignedString(s.privateKey)
@@ -89,7 +94,7 @@ func (s *JWTTokenService) ValidateAccessToken(tokenString string) (*service.Toke
 	// Parse token
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		// Validate signing method
-		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return s.publicKey, nil

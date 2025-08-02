@@ -31,7 +31,7 @@ This document outlines the chosen technology stack for the OAuth 2.0 Authenticat
 * **golang.org/x/crypto/bcrypt**  
   * **Justification:** The bcrypt package from the official Go crypto repository is the standard for secure password hashing. It is battle-tested and resistant to brute-force attacks.  
 * **golang-jwt/jwt**  
-  * **Justification:** A widely-used library for creating and parsing JSON Web Tokens (JWTs). It is well-maintained and supports the necessary signing algorithms (e.g., HMAC, RSA).
+  * **Justification:** A widely-used library for creating and parsing JSON Web Tokens (JWTs). It is well-maintained and supports the necessary signing algorithms (e.g., HMAC, ECDSA). We use ECDSA (ES256) for JWT signing, which provides strong security with smaller key sizes and better performance compared to RSA.
 
 ## **Configuration Management**
 

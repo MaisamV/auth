@@ -14,7 +14,7 @@ This document specifies the concrete features and the OAuth 2.0 grant types that
   * Generate JWTs (JSON Web Tokens) as Access Tokens.  
   * Generate opaque, random strings for Refresh Tokens, which are stored in the database.  
 * **Token Validation:**  
-  * Provide a public key endpoint (/.well-known/jwks.json) for other microservices to fetch keys and validate JWT signatures locally.  
+  * Provide a public key endpoint (/.well-known/jwks.json) for other microservices to fetch ECDSA public keys and validate JWT signatures locally using ES256 algorithm.  
   * This allows other services to verify tokens without calling the auth service, improving performance and resilience.  
 * **Token Refresh:**  
   * Endpoint to exchange a valid (non-expired, non-revoked) Refresh Token for a new Access Token.  

@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -43,10 +44,10 @@ func main() {
 	redisClient := initRedis(config.RedisURL)
 	defer redisClient.Close()
 
-	// Generate RSA key pair for JWT signing (in production, load from secure storage)
-	privateKey, err := generateRSAKeyPair()
+	// Generate ECDSA key pair for JWT signing (in production, load from secure storage)
+	privateKey, err := generateECDSAKeyPair()
 	if err != nil {
-		log.Fatalf("Failed to generate RSA key pair: %v", err)
+		log.Fatalf("Failed to generate ECDSA key pair: %v", err)
 	}
 
 	// Initialize repositories
@@ -198,18 +199,22 @@ func initRedis(redisURL string) *redis.Client {
 	return client
 }
 
-// generateRSAKeyPair generates a new RSA key pair for JWT signing
+// generateECDSAKeyPair generates a new ECDSA key pair for JWT signing
 // In production, you should load keys from secure storage
-func generateRSAKeyPair() (string, error) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+func generateECDSAKeyPair() (string, error) {
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate private key: %w", err)
 	}
 
-	// Convert to PEM format
-	privateKeyBytes := x509.MarshalPKCS1PrivateKey(privateKey)
+	// Convert to PEM format using PKCS8
+	privateKeyBytes, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal private key: %w", err)
+	}
+
 	privateKeyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "RSA PRIVATE KEY",
+		Type:  "PRIVATE KEY",
 		Bytes: privateKeyBytes,
 	})
 
