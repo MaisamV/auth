@@ -16,7 +16,7 @@ func NewRouter(authHandler *handler.AuthHandler) *chi.Mux {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(middleware.Heartbeat("/health"))
+	// Removed middleware.Heartbeat to use custom health endpoint below
 
 	// CORS middleware for browser-based clients
 	r.Use(func(next http.Handler) http.Handler {
