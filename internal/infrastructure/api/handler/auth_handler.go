@@ -182,6 +182,7 @@ func (h *AuthHandler) JWKS(w http.ResponseWriter, r *http.Request) {
 
 	// This is a simplified JWKS response
 	// In a real implementation, you would get the actual public key from the token service
+	// and extract the x, y coordinates from the ECDSA public key
 	jwks := map[string]interface{}{
 		"keys": []map[string]interface{}{
 			{
@@ -190,7 +191,10 @@ func (h *AuthHandler) JWKS(w http.ResponseWriter, r *http.Request) {
 				"kid": "1",
 				"alg": "ES256",
 				"crv": "P-256",
-				// In a real implementation, include the actual public key components (x, y)
+				// Example ECDSA P-256 public key coordinates (base64url encoded)
+				// In production, these would be extracted from the actual public key:
+				// "x": "WKn-ZIGevcwGIyyrzFoZNBdaq9_TsqzGHwHitJBcBmXQ",
+				// "y": "y77As5vbZdIGe4_7GGhOKcHZ9QLE9BQZ154vdTW2HGI",
 			},
 		},
 	}
