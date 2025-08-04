@@ -9,7 +9,11 @@ This document specifies the concrete features and the OAuth 2.0 grant types that
 
 * **User Registration:**  
   * Endpoint for creating a new user with an email and password.  
-  * Passwords must be securely hashed using a modern, strong algorithm (e.g., Argon2id or bcrypt).  
+  * Passwords must be securely hashed using a modern, strong algorithm (e.g., Argon2id or bcrypt).
+* **User Login:**  
+  * Endpoint for authenticating users with email and password.  
+  * Sets secure session cookies for maintaining user authentication state.  
+  * Integrates with OAuth 2.0 authorization flow for seamless user experience.  
 * **Token Issuance:**  
   * Generate JWTs (JSON Web Tokens) as Access Tokens.  
   * Generate opaque, random strings for Refresh Tokens, which are stored in the database.  

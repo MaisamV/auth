@@ -72,10 +72,20 @@ go test ./... \-cover
 
 ### **API Endpoints**
 
-The primary OAuth 2.0 endpoints are:
+The primary endpoints are:
 
-* POST /oauth/token: For exchanging credentials or refresh tokens for an access token.  
-* GET /oauth/authorize: Initiates the authorization code flow.  
-* GET /.well-known/jwks.json: Exposes the public key for JWT validation.
+**Authentication:**
+* POST /auth/register: Register a new user account
+* POST /auth/login: Authenticate user and establish session
 
-For detailed API specifications, please refer to an API documentation tool like Swagger or Postman, which will be added later.
+**OAuth 2.0:**
+* GET /oauth/authorize: Initiates the authorization code flow
+* POST /oauth/token: Exchange credentials or refresh tokens for access tokens
+* POST /oauth/revoke: Revoke refresh tokens
+
+**Utilities:**
+* GET /.well-known/jwks.json: Public key for JWT validation
+* GET /health: Service health check
+* GET /docs: Swagger UI documentation
+
+For detailed API specifications, visit `/docs` for interactive Swagger documentation.
