@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"crypto/ecdsa"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -215,9 +217,39 @@ func (h *AuthHandler) JWKS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// This is a simplified JWKS response
-	// In a real implementation, you would get the actual public key from the token service
-	// and extract the x, y coordinates from the ECDSA public key
+	// Get the public key from the token service
+	publicKeyInterface, err := h.authUseCase.GetPublicKey()
+	if err != nil {
+		http.Error(w, "Failed to get public key", http.StatusInternalServerError)
+		return
+	}
+
+	// Extract ECDSA public key
+	publicKey, ok := publicKeyInterface.(*ecdsa.PublicKey)
+	if !ok {
+		http.Error(w, "Invalid public key type", http.StatusInternalServerError)
+		return
+	}
+
+	// Extract x and y coordinates and encode them as base64url
+	xBytes := publicKey.X.Bytes()
+	yBytes := publicKey.Y.Bytes()
+	
+	// Pad to 32 bytes for P-256 curve
+	if len(xBytes) < 32 {
+		padded := make([]byte, 32)
+		copy(padded[32-len(xBytes):], xBytes)
+		xBytes = padded
+	}
+	if len(yBytes) < 32 {
+		padded := make([]byte, 32)
+		copy(padded[32-len(yBytes):], yBytes)
+		yBytes = padded
+	}
+
+	xCoord := base64.RawURLEncoding.EncodeToString(xBytes)
+	yCoord := base64.RawURLEncoding.EncodeToString(yBytes)
+
 	jwks := map[string]interface{}{
 		"keys": []map[string]interface{}{
 			{
@@ -226,10 +258,8 @@ func (h *AuthHandler) JWKS(w http.ResponseWriter, r *http.Request) {
 				"kid": "1",
 				"alg": "ES256",
 				"crv": "P-256",
-				// Example ECDSA P-256 public key coordinates (base64url encoded)
-				// In production, these would be extracted from the actual public key:
-				// "x": "WKn-ZIGevcwGIyyrzFoZNBdaq9_TsqzGHwHitJBcBmXQ",
-				// "y": "y77As5vbZdIGe4_7GGhOKcHZ9QLE9BQZ154vdTW2HGI",
+				"x":   xCoord,
+				"y":   yCoord,
 			},
 		},
 	}

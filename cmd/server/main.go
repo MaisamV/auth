@@ -2,9 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -44,10 +41,10 @@ func main() {
 	redisClient := initRedis(config.RedisURL)
 	defer redisClient.Close()
 
-	// Generate ECDSA key pair for JWT signing (in production, load from secure storage)
-	privateKey, err := generateECDSAKeyPair()
+	// Load ECDSA private key from file
+	privateKey, err := loadPrivateKeyFromFile("keys/jwt-private.pem")
 	if err != nil {
-		log.Fatalf("Failed to generate ECDSA key pair: %v", err)
+		log.Fatalf("Failed to load private key from file: %v\nPlease run 'go run cmd/keygen/main.go' to generate keys first", err)
 	}
 
 	// Initialize repositories
@@ -199,24 +196,30 @@ func initRedis(redisURL string) *redis.Client {
 	return client
 }
 
-// generateECDSAKeyPair generates a new ECDSA key pair for JWT signing
-// In production, you should load keys from secure storage
-func generateECDSAKeyPair() (string, error) {
-	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+// loadPrivateKeyFromFile loads an ECDSA private key from a PEM file
+func loadPrivateKeyFromFile(keyPath string) (string, error) {
+	// Read the private key file
+	keyData, err := os.ReadFile(keyPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate private key: %w", err)
+		return "", fmt.Errorf("failed to read private key file: %w", err)
 	}
 
-	// Convert to PEM format using PKCS8
-	privateKeyBytes, err := x509.MarshalPKCS8PrivateKey(privateKey)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal private key: %w", err)
+	// Decode PEM block
+	block, _ := pem.Decode(keyData)
+	if block == nil {
+		return "", fmt.Errorf("failed to decode PEM block from private key file")
 	}
 
-	privateKeyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "PRIVATE KEY",
-		Bytes: privateKeyBytes,
-	})
+	// Verify it's a private key
+	if block.Type != "PRIVATE KEY" {
+		return "", fmt.Errorf("invalid key type: expected 'PRIVATE KEY', got '%s'", block.Type)
+	}
 
-	return string(privateKeyPEM), nil
+	// Parse the private key to validate it
+	_, err = x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse private key: %w", err)
+	}
+
+	return string(keyData), nil
 }

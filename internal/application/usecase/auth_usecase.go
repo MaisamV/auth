@@ -488,5 +488,10 @@ func joinScopes(scopes []string) string {
 	if len(scopes) == 0 {
 		return ""
 	}
-	return scopes[0] // Simplified for now
+	return scopes[0] // Simplified: return first scope
+}
+
+// GetPublicKey returns the public key from the token service for JWT verification
+func (uc *AuthUseCase) GetPublicKey() (interface{}, error) {
+	return uc.tokenService.GetPublicKey()
 }

@@ -16,8 +16,11 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the application
+# Build the main application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main cmd/server/main.go
+
+# Build the keygen utility
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o keygen cmd/keygen/main.go
 
 # Final stage
 FROM alpine:latest
@@ -31,14 +34,27 @@ RUN adduser -D -s /bin/sh appuser
 # Set working directory
 WORKDIR /app
 
-# Copy binary from builder stage
+# Copy binaries from builder stage
 COPY --from=builder /app/main .
+COPY --from=builder /app/keygen .
 
 # Copy configuration files
 COPY --from=builder /app/configs ./configs
 
 # Copy API specification
 COPY --from=builder /app/api ./api
+
+# Copy startup script
+COPY --from=builder /app/scripts ./scripts
+
+# Copy keys folder from builder stage if it exists
+COPY --from=builder /app/keys ./keys/
+
+# Create keys directory (in case keys folder doesn't exist)
+RUN mkdir -p keys
+
+# Make startup script executable
+RUN chmod +x scripts/start.sh
 
 # Change ownership to appuser
 RUN chown -R appuser:appuser /app
@@ -53,5 +69,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
-# Run the application
-CMD ["./main"]
+# Run the application with startup script
+CMD ["./scripts/start.sh"]
