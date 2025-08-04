@@ -44,6 +44,40 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+// Login handles user login
+func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req usecase.LoginUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := h.authUseCase.LoginUser(r.Context(), req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	// Set session cookie (simplified session management)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_id",
+		Value:    resp.UserID, // In production, use a proper session token
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false, // Set to true in production with HTTPS
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   3600, // 1 hour
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
 // Authorize handles OAuth 2.0 authorization requests
 func (h *AuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
@@ -63,15 +97,16 @@ func (h *AuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 		CodeChallengeMethod: query.Get("code_challenge_method"),
 	}
 
-	// For this example, we'll assume the user is already authenticated
-	// In a real implementation, you would check for a valid session
-	// and redirect to login if not authenticated
-	userID := r.Header.Get("X-User-ID") // Simplified for demo
-	if userID == "" {
-		http.Error(w, "User not authenticated", http.StatusUnauthorized)
+	// Check for valid session
+	sessionCookie, err := r.Cookie("session_id")
+	if err != nil || sessionCookie.Value == "" {
+		// Redirect to login with return URL
+		returnURL := r.URL.String()
+		loginURL := "/auth/login?return_url=" + returnURL
+		http.Redirect(w, r, loginURL, http.StatusFound)
 		return
 	}
-	req.UserID = userID
+	req.UserID = sessionCookie.Value // In production, validate session token
 
 	resp, err := h.authUseCase.Authorize(r.Context(), req)
 	if err != nil {

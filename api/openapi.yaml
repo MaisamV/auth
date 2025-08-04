@@ -80,10 +80,58 @@ paths:
         '409':
           description: User already exists
 
+  /auth/login:
+    post:
+      summary: User login
+      description: Authenticates a user with email and password, sets session cookie
+      security: []  # No authentication required for login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                password:
+                  type: string
+                  example: password123
+      responses:
+        '200':
+          description: Login successful
+          headers:
+            Set-Cookie:
+              description: Session cookie
+              schema:
+                type: string
+                example: session_id=user_123; Path=/; HttpOnly; SameSite=Lax; Max-Age=3600
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: string
+                    example: user_123
+                  email:
+                    type: string
+                    example: user@example.com
+        '401':
+          description: Invalid credentials
+        '400':
+          description: Bad request (invalid email format, etc.)
+
   /oauth/authorize:
     get:
       summary: OAuth 2.0 authorization endpoint
       description: Initiates the authorization code flow
+      security: []  # No authentication required - handles session internally
       parameters:
         - name: client_id
           in: query

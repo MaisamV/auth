@@ -61,6 +61,43 @@ type RegisterUserResponse struct {
 	Email  string `json:"email"`
 }
 
+// LoginUserRequest represents the request to login a user
+type LoginUserRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+// LoginUserResponse represents the response after user login
+type LoginUserResponse struct {
+	UserID string `json:"user_id"`
+	Email  string `json:"email"`
+}
+
+// LoginUser authenticates a user with email and password
+func (uc *AuthUseCase) LoginUser(ctx context.Context, req LoginUserRequest) (*LoginUserResponse, error) {
+	// Validate email
+	email, err := vo.NewEmail(req.Email)
+	if err != nil {
+		return nil, fmt.Errorf("invalid email: %w", err)
+	}
+
+	// Find user by email
+	user, err := uc.userRepo.FindByEmail(ctx, email)
+	if err != nil {
+		return nil, fmt.Errorf("invalid credentials")
+	}
+
+	// Verify password
+	if err := uc.hashingService.Verify(req.Password, user.Password); err != nil {
+		return nil, fmt.Errorf("invalid credentials")
+	}
+
+	return &LoginUserResponse{
+		UserID: user.ID,
+		Email:  user.Email.String(),
+	}, nil
+}
+
 // RegisterUser creates a new user account
 func (uc *AuthUseCase) RegisterUser(ctx context.Context, req RegisterUserRequest) (*RegisterUserResponse, error) {
 	// Validate email

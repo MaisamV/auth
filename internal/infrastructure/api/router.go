@@ -96,6 +96,8 @@ func NewRouter(authHandler *handler.AuthHandler) *chi.Mux {
 	r.Route("/auth", func(r chi.Router) {
 		// User registration
 		r.HandleFunc("/register", authHandler.Register)
+		// User login
+		r.HandleFunc("/login", authHandler.Login)
 	})
 
 	// Health check endpoint
