@@ -46,7 +46,7 @@ services:
       PORT: 8080
       ISSUER: https://auth.example.com
     volumes:
-      - jwt_keys:/app/keys
+      - ./keys:/app/keys
     depends_on:
       postgres:
         condition: service_healthy
@@ -56,7 +56,6 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  jwt_keys:
 
 networks:
   default:
