@@ -65,15 +65,26 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set session cookie (simplified session management)
+	// Set secure JWT session cookie
 	http.SetCookie(w, &http.Cookie{
-		Name:     "session_id",
-		Value:    resp.UserID, // In production, use a proper session token
+		Name:     "session_token",
+		Value:    resp.SessionToken,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   false, // Set to true in production with HTTPS
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   3600, // 1 hour
+		MaxAge:   3600, // 1 hour (matches JWT expiry)
+	})
+
+	// Set secure session refresh token cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_refresh_token",
+		Value:    resp.SessionRefreshToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false, // Set to true in production with HTTPS
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   15552000, // 6 months (matches refresh token expiry)
 	})
 
 	w.Header().Set("Content-Type", "application/json")
@@ -100,7 +111,7 @@ func (h *AuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check for valid session
-	sessionCookie, err := r.Cookie("session_id")
+	sessionCookie, err := r.Cookie("session_token")
 	if err != nil || sessionCookie.Value == "" {
 		// Redirect to login with return URL
 		returnURL := r.URL.String()
@@ -108,7 +119,17 @@ func (h *AuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, loginURL, http.StatusFound)
 		return
 	}
-	req.UserID = sessionCookie.Value // In production, validate session token
+
+	// Validate session token
+	userID, err := h.authUseCase.ValidateSessionToken(r.Context(), sessionCookie.Value)
+	if err != nil {
+		// Invalid session, redirect to login
+		returnURL := r.URL.String()
+		loginURL := "/auth/login?return_url=" + returnURL
+		http.Redirect(w, r, loginURL, http.StatusFound)
+		return
+	}
+	req.UserID = userID
 
 	resp, err := h.authUseCase.Authorize(r.Context(), req)
 	if err != nil {
@@ -266,6 +287,90 @@ func (h *AuthHandler) JWKS(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(jwks)
+}
+
+// RefreshSession handles session token refresh
+func (h *AuthHandler) RefreshSession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get refresh token from cookie
+	refreshCookie, err := r.Cookie("session_refresh_token")
+	if err != nil || refreshCookie.Value == "" {
+		http.Error(w, "Refresh token not found", http.StatusUnauthorized)
+		return
+	}
+
+	req := usecase.RefreshSessionTokenRequest{
+		RefreshToken: refreshCookie.Value,
+	}
+
+	resp, err := h.authUseCase.RefreshSessionToken(r.Context(), req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	// Set new session token cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    resp.SessionToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false, // Set to true in production with HTTPS
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   3600, // 1 hour
+	})
+
+	// Set new refresh token cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_refresh_token",
+		Value:    resp.SessionRefreshToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false, // Set to true in production with HTTPS
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   15552000, // 6 months
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+// Logout handles user logout
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Clear the session token cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false, // Set to true in production with HTTPS
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1, // Delete the cookie
+	})
+
+	// Clear the session refresh token cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_refresh_token",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false, // Set to true in production with HTTPS
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1, // Delete the cookie
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Logged out successfully"})
 }
 
 // extractBearerToken extracts the bearer token from the Authorization header

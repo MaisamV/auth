@@ -159,6 +159,150 @@ func (s *JWTTokenService) GenerateAuthorizationCode() (string, error) {
 	return s.generateRandomString(32)
 }
 
+// GenerateSessionToken creates a JWT token for user sessions
+func (s *JWTTokenService) GenerateSessionToken(userID string, expiresIn time.Duration) (string, error) {
+	now := time.Now()
+	expiry := now.Add(expiresIn)
+
+	// Generate a unique token ID
+	tokenID, err := s.generateRandomString(16)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate token ID: %w", err)
+	}
+
+	// Create session claims
+	claims := jwt.MapClaims{
+		"sub":  userID,
+		"iat":  now.Unix(),
+		"exp":  expiry.Unix(),
+		"iss":  s.issuer,
+		"jti":  tokenID,
+		"type": "session", // Mark this as a session token
+	}
+
+	// Create token
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+
+	// Sign token
+	tokenString, err := token.SignedString(s.privateKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign session token: %w", err)
+	}
+
+	return tokenString, nil
+}
+
+// ValidateSessionToken validates a session JWT token and returns user ID
+func (s *JWTTokenService) ValidateSessionToken(tokenString string) (string, error) {
+	// Parse token
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		// Validate signing method
+		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return s.publicKey, nil
+	})
+
+	if err != nil {
+		return "", fmt.Errorf("failed to parse session token: %w", err)
+	}
+
+	if !token.Valid {
+		return "", fmt.Errorf("invalid session token")
+	}
+
+	// Extract claims
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", fmt.Errorf("invalid session token claims")
+	}
+
+	// Verify this is a session token
+	if tokenType, ok := claims["type"].(string); !ok || tokenType != "session" {
+		return "", fmt.Errorf("not a session token")
+	}
+
+	// Extract user ID
+	userID, ok := claims["sub"].(string)
+	if !ok || userID == "" {
+		return "", fmt.Errorf("invalid user ID in session token")
+	}
+
+	return userID, nil
+}
+
+// GenerateSessionRefreshToken creates a refresh token for session renewal
+func (s *JWTTokenService) GenerateSessionRefreshToken(userID string) (string, error) {
+	now := time.Now()
+	expiry := now.Add(6 * 30 * 24 * time.Hour) // 6 months
+
+	// Generate a unique token ID
+	tokenID, err := s.generateRandomString(16)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate token ID: %w", err)
+	}
+
+	// Create refresh token claims
+	claims := jwt.MapClaims{
+		"sub":  userID,
+		"iat":  now.Unix(),
+		"exp":  expiry.Unix(),
+		"iss":  s.issuer,
+		"jti":  tokenID,
+		"type": "session_refresh", // Mark this as a session refresh token
+	}
+
+	// Create token
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+
+	// Sign token
+	tokenString, err := token.SignedString(s.privateKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign session refresh token: %w", err)
+	}
+
+	return tokenString, nil
+}
+
+// ValidateSessionRefreshToken validates a session refresh token and returns user ID
+func (s *JWTTokenService) ValidateSessionRefreshToken(tokenString string) (string, error) {
+	// Parse token
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		// Validate signing method
+		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return s.publicKey, nil
+	})
+
+	if err != nil {
+		return "", fmt.Errorf("failed to parse session refresh token: %w", err)
+	}
+
+	if !token.Valid {
+		return "", fmt.Errorf("invalid session refresh token")
+	}
+
+	// Extract claims
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", fmt.Errorf("invalid session refresh token claims")
+	}
+
+	// Verify this is a session refresh token
+	if tokenType, ok := claims["type"].(string); !ok || tokenType != "session_refresh" {
+		return "", fmt.Errorf("not a session refresh token")
+	}
+
+	// Extract user ID
+	userID, ok := claims["sub"].(string)
+	if !ok || userID == "" {
+		return "", fmt.Errorf("invalid user ID in session refresh token")
+	}
+
+	return userID, nil
+}
+
 // GetPublicKey returns the public key for JWT verification
 func (s *JWTTokenService) GetPublicKey() (interface{}, error) {
 	return s.publicKey, nil

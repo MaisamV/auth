@@ -69,8 +69,10 @@ type LoginUserRequest struct {
 
 // LoginUserResponse represents the response after user login
 type LoginUserResponse struct {
-	UserID string `json:"user_id"`
-	Email  string `json:"email"`
+	UserID              string `json:"user_id"`
+	Email               string `json:"email"`
+	SessionToken        string `json:"session_token"`
+	SessionRefreshToken string `json:"session_refresh_token"`
 }
 
 // LoginUser authenticates a user with email and password
@@ -92,9 +94,23 @@ func (uc *AuthUseCase) LoginUser(ctx context.Context, req LoginUserRequest) (*Lo
 		return nil, fmt.Errorf("invalid credentials")
 	}
 
+	// Generate session token (1 hour expiry)
+	sessionToken, err := uc.tokenService.GenerateSessionToken(user.ID, 1*time.Hour)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate session token: %w", err)
+	}
+
+	// Generate session refresh token (30 days expiry)
+	sessionRefreshToken, err := uc.tokenService.GenerateSessionRefreshToken(user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate session refresh token: %w", err)
+	}
+
 	return &LoginUserResponse{
-		UserID: user.ID,
-		Email:  user.Email.String(),
+		UserID:              user.ID,
+		Email:               user.Email.String(),
+		SessionToken:        sessionToken,
+		SessionRefreshToken: sessionRefreshToken,
 	}, nil
 }
 
@@ -491,7 +507,49 @@ func joinScopes(scopes []string) string {
 	return scopes[0] // Simplified: return first scope
 }
 
-// GetPublicKey returns the public key from the token service for JWT verification
+// ValidateSessionToken validates a session token and returns the user ID
+func (uc *AuthUseCase) ValidateSessionToken(ctx context.Context, token string) (string, error) {
+	return uc.tokenService.ValidateSessionToken(token)
+}
+
+// RefreshSessionTokenRequest represents the request to refresh a session token
+type RefreshSessionTokenRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+// RefreshSessionTokenResponse represents the response after refreshing a session token
+type RefreshSessionTokenResponse struct {
+	SessionToken        string `json:"session_token"`
+	SessionRefreshToken string `json:"session_refresh_token"`
+}
+
+// RefreshSessionToken refreshes a session token using a refresh token
+func (uc *AuthUseCase) RefreshSessionToken(ctx context.Context, req RefreshSessionTokenRequest) (*RefreshSessionTokenResponse, error) {
+	// Validate refresh token
+	userID, err := uc.tokenService.ValidateSessionRefreshToken(req.RefreshToken)
+	if err != nil {
+		return nil, fmt.Errorf("invalid refresh token: %w", err)
+	}
+
+	// Generate new session token (1 hour expiry)
+	newSessionToken, err := uc.tokenService.GenerateSessionToken(userID, 1*time.Hour)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate new session token: %w", err)
+	}
+
+	// Generate new session refresh token (30 days expiry)
+	newSessionRefreshToken, err := uc.tokenService.GenerateSessionRefreshToken(userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate new session refresh token: %w", err)
+	}
+
+	return &RefreshSessionTokenResponse{
+		SessionToken:        newSessionToken,
+		SessionRefreshToken: newSessionRefreshToken,
+	}, nil
+}
+
+// GetPublicKey returns the public key for JWT verification
 func (uc *AuthUseCase) GetPublicKey() (interface{}, error) {
 	return uc.tokenService.GetPublicKey()
 }

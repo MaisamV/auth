@@ -75,6 +75,12 @@ paths:
                   email:
                     type: string
                     example: user@example.com
+                  session_token:
+                    type: string
+                    description: JWT session token (1 hour expiry)
+                  session_refresh_token:
+                    type: string
+                    description: JWT refresh token (6 months expiry)
         '400':
           description: Bad request (invalid email, weak password, etc.)
         '409':
@@ -83,7 +89,7 @@ paths:
   /auth/login:
     post:
       summary: User login
-      description: Authenticates a user with email and password, sets session cookie
+      description: Authenticates a user with email and password, sets session (1 hour) and refresh token (6 months) cookies
       security: []  # No authentication required for login
       requestBody:
         required: true
@@ -107,10 +113,10 @@ paths:
           description: Login successful
           headers:
             Set-Cookie:
-              description: Session cookie
+              description: Session and refresh token cookies
               schema:
                 type: string
-                example: session_id=user_123; Path=/; HttpOnly; SameSite=Lax; Max-Age=3600
+                example: session_token=jwt_token; session_refresh_token=refresh_jwt; Path=/; HttpOnly; SameSite=Lax
           content:
             application/json:
               schema:
@@ -126,6 +132,61 @@ paths:
           description: Invalid credentials
         '400':
           description: Bad request (invalid email format, etc.)
+
+  /auth/refresh:
+    post:
+      summary: Refresh session token
+      description: Refreshes an expired session token using a refresh token from cookies
+      security: []  # No authentication required - uses refresh token from cookie
+      responses:
+        '200':
+          description: Session refreshed successfully
+          headers:
+            Set-Cookie:
+              description: New session and refresh token cookies
+              schema:
+                type: string
+                example: session_token=new_token; Path=/; HttpOnly; SameSite=Lax; Max-Age=3600
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_token:
+                    type: string
+                    description: New session token
+                  session_refresh_token:
+                    type: string
+                    description: New refresh token
+        '401':
+          description: Invalid or missing refresh token
+        '400':
+          description: Bad request
+
+  /auth/logout:
+    post:
+      summary: User logout
+      description: Logs out the user by clearing session and refresh token cookies
+      security: []  # No authentication required for logout
+      responses:
+        '200':
+          description: Logout successful
+          headers:
+            Set-Cookie:
+              description: Cleared session cookies
+              schema:
+                type: string
+                example: session_token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=-1
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Logged out successfully
+        '405':
+          description: Method not allowed
 
   /oauth/authorize:
     get:

@@ -27,6 +27,18 @@ type TokenService interface {
 	// GenerateAuthorizationCode creates a new authorization code
 	GenerateAuthorizationCode() (string, error)
 
+	// GenerateSessionToken creates a JWT token for user sessions
+	GenerateSessionToken(userID string, expiresIn time.Duration) (string, error)
+
+	// ValidateSessionToken validates a session JWT token and returns user ID
+	ValidateSessionToken(token string) (string, error)
+
+	// GenerateSessionRefreshToken creates a refresh token for session renewal
+	GenerateSessionRefreshToken(userID string) (string, error)
+
+	// ValidateSessionRefreshToken validates a session refresh token and returns user ID
+	ValidateSessionRefreshToken(token string) (string, error)
+
 	// GetPublicKey returns the public key for JWT verification
 	GetPublicKey() (interface{}, error)
 }
