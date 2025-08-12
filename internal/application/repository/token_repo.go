@@ -41,6 +41,30 @@ type RefreshTokenRepository interface {
 	DeleteExpired(ctx context.Context) error
 }
 
+// SessionRefreshTokenRepository defines the interface for session refresh token persistence
+type SessionRefreshTokenRepository interface {
+	// Save stores a session refresh token
+	Save(ctx context.Context, token *entity.SessionRefreshToken, tokenHash string) error
+
+	// FindByTokenHash retrieves a session refresh token by its hash
+	FindByTokenHash(ctx context.Context, tokenHash string) (*entity.SessionRefreshToken, error)
+
+	// FindByUserID retrieves all session refresh tokens for a user
+	FindByUserID(ctx context.Context, userID string) ([]*entity.SessionRefreshToken, error)
+
+	// Update updates a session refresh token
+	Update(ctx context.Context, token *entity.SessionRefreshToken) error
+
+	// Revoke marks a session refresh token as revoked
+	Revoke(ctx context.Context, tokenHash string) error
+
+	// RevokeAllForUser revokes all session refresh tokens for a user
+	RevokeAllForUser(ctx context.Context, userID string) error
+
+	// DeleteExpired removes all expired session refresh tokens
+	DeleteExpired(ctx context.Context) error
+}
+
 // TokenBlacklistRepository defines the interface for token blacklist (for immediate revocation)
 type TokenBlacklistRepository interface {
 	// Add adds a token to the blacklist
