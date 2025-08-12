@@ -41,6 +41,28 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Set secure JWT session cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    resp.SessionToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false, // Set to true in production with HTTPS
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   3600, // 1 hour (matches JWT expiry)
+	})
+
+	// Set secure session refresh token cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_refresh_token",
+		Value:    resp.SessionRefreshToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false, // Set to true in production with HTTPS
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   15552000, // 6 months (matches refresh token expiry)
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(resp)
