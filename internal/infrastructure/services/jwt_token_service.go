@@ -3,13 +3,16 @@ package services
 import (
 	"crypto/ecdsa"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/pem"
 	"fmt"
 	"time"
 
 	"github.com/auth-service/internal/application/service"
+	"github.com/auth-service/internal/domain/entity"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -232,31 +235,36 @@ func (s *JWTTokenService) ValidateSessionToken(tokenString string) (string, erro
 }
 
 // GenerateSessionRefreshToken creates a refresh token for session renewal
-func (s *JWTTokenService) GenerateSessionRefreshToken(userID string) (string, error) {
-	now := time.Now()
-	expiry := now.Add(6 * 30 * 24 * time.Hour) // 6 months
+func (s *JWTTokenService) GenerateSessionRefreshToken(userID string) (*entity.SessionRefreshToken, error) {
+	expiresIn := 30 * 24 * time.Hour // 1 month
 
 	// Generate a unique token ID
 	tokenID, err := s.generateRandomString(16)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate token ID: %w", err)
+		return nil, fmt.Errorf("failed to generate token ID: %w", err)
 	}
 
+	// Create and return the entity
+	return entity.NewSessionRefreshToken(tokenID, userID, s.issuer, expiresIn), nil
+}
+
+// GenerateSessionRefreshTokenJWT creates a JWT string from session refresh token data
+func (s *JWTTokenService) GenerateSessionRefreshTokenJWT(session *entity.SessionRefreshToken) (string, error) {
 	// Create refresh token claims
 	claims := jwt.MapClaims{
-		"sub":  userID,
-		"iat":  now.Unix(),
-		"exp":  expiry.Unix(),
-		"iss":  s.issuer,
-		"jti":  tokenID,
-		"type": "session_refresh", // Mark this as a session refresh token
+		"sub":  session.GetUserID(),
+		"iat":  session.GetCreatedAt().Unix(),
+		"exp":  session.GetExpiresAt().Unix(),
+		"iss":  session.GetIssuer(),
+		"jti":  session.GetID(),
+		"type": session.GetType(), // Mark this as a session refresh token
 	}
 
 	// Create token
-	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	tokenJwt := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
 
 	// Sign token
-	tokenString, err := token.SignedString(s.privateKey)
+	tokenString, err := tokenJwt.SignedString(s.privateKey)
 	if err != nil {
 		return "", fmt.Errorf("failed to sign session refresh token: %w", err)
 	}
@@ -301,6 +309,12 @@ func (s *JWTTokenService) ValidateSessionRefreshToken(tokenString string) (strin
 	}
 
 	return userID, nil
+}
+
+// HashToken creates a hash of a token for database storage
+func (s *JWTTokenService) HashToken(token string) (string, error) {
+	hash := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(hash[:]), nil
 }
 
 // GetPublicKey returns the public key for JWT verification

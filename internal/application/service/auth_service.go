@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/auth-service/internal/domain/entity"
 	"time"
 )
 
@@ -34,10 +35,16 @@ type TokenService interface {
 	ValidateSessionToken(token string) (string, error)
 
 	// GenerateSessionRefreshToken creates a refresh token for session renewal
-	GenerateSessionRefreshToken(userID string) (string, error)
+	GenerateSessionRefreshToken(userID string) (*entity.SessionRefreshToken, error)
+
+	// GenerateSessionRefreshTokenJWT creates a JWT string from session refresh token data
+	GenerateSessionRefreshTokenJWT(session *entity.SessionRefreshToken) (string, error)
 
 	// ValidateSessionRefreshToken validates a session refresh token and returns user ID
 	ValidateSessionRefreshToken(token string) (string, error)
+
+	// HashToken creates a hash of a token for database storage
+	HashToken(token string) (string, error)
 
 	// GetPublicKey returns the public key for JWT verification
 	GetPublicKey() (interface{}, error)
