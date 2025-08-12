@@ -53,10 +53,7 @@ func (srt *SessionRefreshToken) IsRevoked() bool {
 	return srt.revoked
 }
 
-// Revoke marks the session refresh token as revoked
-func (srt *SessionRefreshToken) Revoke() {
-	srt.revoked = true
-}
+
 
 // RevokeWithReason marks the session refresh token as revoked with a specific reason
 func (srt *SessionRefreshToken) RevokeWithReason(reason vo.RevokeReason) {

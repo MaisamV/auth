@@ -79,8 +79,3 @@ func (rt *RefreshToken) IsExpired() bool {
 func (rt *RefreshToken) IsValid() bool {
 	return !rt.IsExpired() && !rt.Revoked
 }
-
-// Revoke marks the refresh token as revoked
-func (rt *RefreshToken) Revoke() {
-	rt.Revoked = true
-}
