@@ -33,11 +33,11 @@ type RefreshTokenRepository interface {
 	// FindByUserID retrieves all refresh tokens for a user
 	FindByUserID(ctx context.Context, userID string) ([]*entity.RefreshToken, error)
 
-	// Revoke marks a refresh token as revoked
-	Revoke(ctx context.Context, token string) error
+	// RevokeWithReason marks a refresh token as revoked with a specific reason
+	RevokeWithReason(ctx context.Context, token string, reason vo.RevokeReason) error
 
-	// RevokeAllForUser revokes all refresh tokens for a user
-	RevokeAllForUser(ctx context.Context, userID string) error
+	// RevokeAllForUserWithReason revokes all refresh tokens for a user with a specific reason
+	RevokeAllForUserWithReason(ctx context.Context, userID string, reason vo.RevokeReason) error
 
 	// DeleteExpired removes all expired refresh tokens
 	DeleteExpired(ctx context.Context) error
@@ -57,14 +57,8 @@ type SessionRefreshTokenRepository interface {
 	// Update updates a session refresh token
 	Update(ctx context.Context, token *entity.SessionRefreshToken) error
 
-	// Revoke marks a session refresh token as revoked
-	Revoke(ctx context.Context, tokenHash string) error
-
 	// RevokeWithReason marks a session refresh token as revoked with a specific reason
 	RevokeWithReason(ctx context.Context, tokenHash string, reason vo.RevokeReason) error
-
-	// RevokeAllForUser revokes all session refresh tokens for a user
-	RevokeAllForUser(ctx context.Context, userID string) error
 
 	// RevokeAllForUserWithReason revokes all session refresh tokens for a user with a specific reason
 	RevokeAllForUserWithReason(ctx context.Context, userID string, reason vo.RevokeReason) error
