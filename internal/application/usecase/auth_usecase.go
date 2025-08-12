@@ -60,8 +60,10 @@ type RegisterUserRequest struct {
 
 // RegisterUserResponse represents the response after user registration
 type RegisterUserResponse struct {
-	UserID string `json:"user_id"`
-	Email  string `json:"email"`
+	UserID              string `json:"user_id"`
+	Email               string `json:"email"`
+	SessionToken        string `json:"session_token"`
+	SessionRefreshToken string `json:"session_refresh_token"`
 }
 
 // LoginUserRequest represents the request to login a user
@@ -165,9 +167,39 @@ func (uc *AuthUseCase) RegisterUser(ctx context.Context, req RegisterUserRequest
 		return nil, fmt.Errorf("failed to save user: %w", err)
 	}
 
+	// Generate session token (1 hour expiry)
+	sessionToken, err := uc.tokenService.GenerateSessionToken(user.ID, 1*time.Hour)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate session token: %w", err)
+	}
+
+	// Generate session refresh token entity
+	sessionRefreshTokenEntity, err := uc.tokenService.GenerateSessionRefreshToken(user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate session refresh token: %w", err)
+	}
+
+	// Convert entity to JWT string for response
+	sessionRefreshToken, err := sessionRefreshTokenEntity.ToJwt(uc.tokenService)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert session refresh token to JWT: %w", err)
+	}
+
+	hash, err := uc.tokenService.HashToken(sessionRefreshToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash session refresh token: %w", err)
+	}
+
+	// Save session refresh token to database
+	if err := uc.sessionRefreshTokenRepo.Save(ctx, sessionRefreshTokenEntity, hash); err != nil {
+		return nil, fmt.Errorf("failed to save session refresh token: %w", err)
+	}
+
 	return &RegisterUserResponse{
-		UserID: user.ID,
-		Email:  user.Email.String(),
+		UserID:              user.ID,
+		Email:               user.Email.String(),
+		SessionToken:        sessionToken,
+		SessionRefreshToken: sessionRefreshToken,
 	}, nil
 }
 
@@ -500,8 +532,8 @@ func (uc *AuthUseCase) RevokeToken(ctx context.Context, req RevokeTokenRequest) 
 		return err
 	}
 
-	// Revoke the token (assuming it's a refresh token)
-	if err := uc.refreshTokenRepo.Revoke(ctx, req.Token); err != nil {
+	// Revoke the token (assuming it's a refresh token) with ADMIN reason for OAuth revocation
+	if err := uc.refreshTokenRepo.RevokeWithReason(ctx, req.Token, vo.RevokeReasonAdmin); err != nil {
 		return fmt.Errorf("failed to revoke token: %w", err)
 	}
 
