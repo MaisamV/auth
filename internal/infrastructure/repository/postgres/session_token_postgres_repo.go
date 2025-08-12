@@ -199,29 +199,7 @@ func (r *SessionRefreshTokenPostgresRepository) Update(ctx context.Context, toke
 	return nil
 }
 
-// Revoke marks a session refresh token as revoked
-func (r *SessionRefreshTokenPostgresRepository) Revoke(ctx context.Context, tokenHash string) error {
-	query := `
-		UPDATE session_refresh_tokens SET revoked = true
-		WHERE token_hash = $1
-	`
 
-	result, err := r.db.ExecContext(ctx, query, tokenHash)
-	if err != nil {
-		return fmt.Errorf("failed to revoke session refresh token: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("session refresh token not found")
-	}
-
-	return nil
-}
 
 // RevokeWithReason marks a session refresh token as revoked with a specific reason
 func (r *SessionRefreshTokenPostgresRepository) RevokeWithReason(ctx context.Context, tokenHash string, reason vo.RevokeReason) error {
@@ -248,20 +226,7 @@ func (r *SessionRefreshTokenPostgresRepository) RevokeWithReason(ctx context.Con
 	return nil
 }
 
-// RevokeAllForUser revokes all session refresh tokens for a user
-func (r *SessionRefreshTokenPostgresRepository) RevokeAllForUser(ctx context.Context, userID string) error {
-	query := `
-		UPDATE session_refresh_tokens SET revoked = true
-		WHERE user_id = $1 AND revoked = false
-	`
 
-	_, err := r.db.ExecContext(ctx, query, userID)
-	if err != nil {
-		return fmt.Errorf("failed to revoke all session refresh tokens for user: %w", err)
-	}
-
-	return nil
-}
 
 // RevokeAllForUserWithReason revokes all session refresh tokens for a user with a specific reason
 func (r *SessionRefreshTokenPostgresRepository) RevokeAllForUserWithReason(ctx context.Context, userID string, reason vo.RevokeReason) error {

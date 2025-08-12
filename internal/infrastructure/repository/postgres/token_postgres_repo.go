@@ -7,6 +7,7 @@ import (
 
 	"github.com/auth-service/internal/application/repository"
 	"github.com/auth-service/internal/domain/entity"
+	"github.com/auth-service/internal/domain/vo"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 )
@@ -240,13 +241,14 @@ func (r *RefreshTokenPostgresRepository) FindByUserID(ctx context.Context, userI
 	return tokens, nil
 }
 
-// Revoke marks a refresh token as revoked
-func (r *RefreshTokenPostgresRepository) Revoke(ctx context.Context, token string) error {
-	query := `UPDATE refresh_tokens SET revoked = true WHERE token = $1`
+// RevokeWithReason marks a refresh token as revoked with a specific reason
+func (r *RefreshTokenPostgresRepository) RevokeWithReason(ctx context.Context, token string, reason vo.RevokeReason) error {
+	reasonStr := reason.String()
+	query := `UPDATE refresh_tokens SET revoked = true, revoke_reason = $2 WHERE token = $1`
 
-	result, err := r.db.ExecContext(ctx, query, token)
+	result, err := r.db.ExecContext(ctx, query, token, reasonStr)
 	if err != nil {
-		return fmt.Errorf("failed to revoke refresh token: %w", err)
+		return fmt.Errorf("failed to revoke refresh token with reason: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
@@ -261,13 +263,14 @@ func (r *RefreshTokenPostgresRepository) Revoke(ctx context.Context, token strin
 	return nil
 }
 
-// RevokeAllForUser revokes all refresh tokens for a user
-func (r *RefreshTokenPostgresRepository) RevokeAllForUser(ctx context.Context, userID string) error {
-	query := `UPDATE refresh_tokens SET revoked = true WHERE user_id = $1 AND revoked = false`
+// RevokeAllForUserWithReason revokes all refresh tokens for a user with a specific reason
+func (r *RefreshTokenPostgresRepository) RevokeAllForUserWithReason(ctx context.Context, userID string, reason vo.RevokeReason) error {
+	reasonStr := reason.String()
+	query := `UPDATE refresh_tokens SET revoked = true, revoke_reason = $2 WHERE user_id = $1 AND revoked = false`
 
-	_, err := r.db.ExecContext(ctx, query, userID)
+	_, err := r.db.ExecContext(ctx, query, userID, reasonStr)
 	if err != nil {
-		return fmt.Errorf("failed to revoke all refresh tokens for user: %w", err)
+		return fmt.Errorf("failed to revoke all refresh tokens for user with reason: %w", err)
 	}
 
 	return nil
