@@ -573,9 +573,9 @@ func (uc *AuthUseCase) RefreshSessionToken(ctx context.Context, req RefreshSessi
 		return nil, fmt.Errorf("refresh token does not belong to the user")
 	}
 
-	// Mark the current token as used
+	// Mark the current token as used and revoke it with REFRESH reason
 	sessionRefreshToken.MarkAsUsed()
-	sessionRefreshToken.Revoke()
+	sessionRefreshToken.RevokeWithReason(vo.RevokeReasonRefresh)
 	if err := uc.sessionRefreshTokenRepo.Update(ctx, sessionRefreshToken); err != nil {
 		return nil, fmt.Errorf("failed to update session refresh token: %w", err)
 	}
@@ -612,6 +612,32 @@ func (uc *AuthUseCase) RefreshSessionToken(ctx context.Context, req RefreshSessi
 		SessionToken:        newSessionToken,
 		SessionRefreshToken: newSessionRefreshToken,
 	}, nil
+}
+
+// LogoutRequest represents the request to logout a user
+type LogoutRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+// Logout logs out a user by revoking their session refresh token
+func (uc *AuthUseCase) Logout(ctx context.Context, req LogoutRequest) error {
+	if req.RefreshToken == "" {
+		return nil // No token to revoke
+	}
+
+	// Hash the provided token to check against database
+	tokenHash, err := uc.tokenService.HashToken(req.RefreshToken)
+	if err != nil {
+		return fmt.Errorf("failed to hash refresh token: %w", err)
+	}
+
+	// Revoke the session refresh token with LOGOUT reason
+	if err := uc.sessionRefreshTokenRepo.RevokeWithReason(ctx, tokenHash, vo.RevokeReasonLogout); err != nil {
+		// Don't return error if token not found, as it might already be revoked or expired
+		return nil
+	}
+
+	return nil
 }
 
 // GetPublicKey returns the public key for JWT verification

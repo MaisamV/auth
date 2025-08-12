@@ -8,6 +8,7 @@ import (
 
 	"github.com/auth-service/internal/application/repository"
 	"github.com/auth-service/internal/domain/entity"
+	"github.com/auth-service/internal/domain/vo"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -23,16 +24,23 @@ func NewSessionRefreshTokenPostgresRepository(db *sqlx.DB) repository.SessionRef
 
 // Save stores a session refresh token
 func (r *SessionRefreshTokenPostgresRepository) Save(ctx context.Context, token *entity.SessionRefreshToken, tokenHash string) error {
+	var revokeReasonStr *string
+	if reason := token.GetRevokeReason(); reason != nil {
+		reasonStr := reason.String()
+		revokeReasonStr = &reasonStr
+	}
+
 	query := `
 		INSERT INTO session_refresh_tokens (
-			id, token_hash, user_id, expires_at, created_at, revoked, last_used_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7)
+			id, token_hash, user_id, expires_at, created_at, revoked, last_used_at, revoke_reason
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (id) DO UPDATE SET
 			token_hash = EXCLUDED.token_hash,
 			user_id = EXCLUDED.user_id,
 			expires_at = EXCLUDED.expires_at,
 			revoked = EXCLUDED.revoked,
-			last_used_at = EXCLUDED.last_used_at
+			last_used_at = EXCLUDED.last_used_at,
+			revoke_reason = EXCLUDED.revoke_reason
 	`
 
 	_, err := r.db.ExecContext(ctx, query,
@@ -43,6 +51,7 @@ func (r *SessionRefreshTokenPostgresRepository) Save(ctx context.Context, token 
 		token.GetCreatedAt(),
 		token.IsRevoked(),
 		token.GetLastUsedAtPtr(),
+		revokeReasonStr,
 	)
 
 	if err != nil {
@@ -55,7 +64,7 @@ func (r *SessionRefreshTokenPostgresRepository) Save(ctx context.Context, token 
 // FindByTokenHash retrieves a session refresh token by its hash
 func (r *SessionRefreshTokenPostgresRepository) FindByTokenHash(ctx context.Context, tokenHash string) (*entity.SessionRefreshToken, error) {
 	query := `
-		SELECT id, user_id, expires_at, created_at, revoked, last_used_at
+		SELECT id, user_id, expires_at, created_at, revoked, last_used_at, revoke_reason
 		FROM session_refresh_tokens WHERE token_hash = $1
 	`
 
@@ -64,6 +73,7 @@ func (r *SessionRefreshTokenPostgresRepository) FindByTokenHash(ctx context.Cont
 	var expiresAt, createdAt time.Time
 	var revoked bool
 	var lastUsedAt *time.Time
+	var revokeReasonStr *string
 
 	err := r.db.QueryRowContext(ctx, query, tokenHash).Scan(
 		&id,
@@ -72,6 +82,7 @@ func (r *SessionRefreshTokenPostgresRepository) FindByTokenHash(ctx context.Cont
 		&createdAt,
 		&revoked,
 		&lastUsedAt,
+		&revokeReasonStr,
 	)
 
 	if err != nil {
@@ -81,15 +92,22 @@ func (r *SessionRefreshTokenPostgresRepository) FindByTokenHash(ctx context.Cont
 		return nil, fmt.Errorf("failed to find session refresh token: %w", err)
 	}
 
+	// Convert revoke reason string to enum
+	var revokeReason *vo.RevokeReason
+	if revokeReasonStr != nil {
+		reason := vo.RevokeReason(*revokeReasonStr)
+		revokeReason = &reason
+	}
+
 	// Create entity using the factory method
-	token := entity.NewSessionRefreshTokenFromDB(id, userID, expiresAt, createdAt, revoked, lastUsedAt)
+	token := entity.NewSessionRefreshTokenFromDB(id, userID, expiresAt, createdAt, revoked, lastUsedAt, revokeReason)
 	return token, nil
 }
 
 // FindByUserID retrieves all session refresh tokens for a user
 func (r *SessionRefreshTokenPostgresRepository) FindByUserID(ctx context.Context, userID string) ([]*entity.SessionRefreshToken, error) {
 	query := `
-		SELECT id, user_id, expires_at, created_at, revoked, last_used_at
+		SELECT id, user_id, expires_at, created_at, revoked, last_used_at, revoke_reason
 		FROM session_refresh_tokens WHERE user_id = $1 AND revoked = false
 		ORDER BY created_at DESC
 	`
@@ -108,6 +126,7 @@ func (r *SessionRefreshTokenPostgresRepository) FindByUserID(ctx context.Context
 		var expiresAt, createdAt time.Time
 		var revoked bool
 		var lastUsedAt *time.Time
+		var revokeReasonStr *string
 
 		err := rows.Scan(
 			&id,
@@ -116,13 +135,21 @@ func (r *SessionRefreshTokenPostgresRepository) FindByUserID(ctx context.Context
 			&createdAt,
 			&revoked,
 			&lastUsedAt,
+			&revokeReasonStr,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan session refresh token: %w", err)
 		}
 
+		// Convert revoke reason string to enum
+		var revokeReason *vo.RevokeReason
+		if revokeReasonStr != nil {
+			reason := vo.RevokeReason(*revokeReasonStr)
+			revokeReason = &reason
+		}
+
 		// Create entity using the factory method
-		token := entity.NewSessionRefreshTokenFromDB(id, userIDDB, expiresAt, createdAt, revoked, lastUsedAt)
+		token := entity.NewSessionRefreshTokenFromDB(id, userIDDB, expiresAt, createdAt, revoked, lastUsedAt, revokeReason)
 		tokens = append(tokens, token)
 	}
 
@@ -135,10 +162,17 @@ func (r *SessionRefreshTokenPostgresRepository) FindByUserID(ctx context.Context
 
 // Update updates a session refresh token
 func (r *SessionRefreshTokenPostgresRepository) Update(ctx context.Context, token *entity.SessionRefreshToken) error {
+	var revokeReasonStr *string
+	if reason := token.GetRevokeReason(); reason != nil {
+		reasonStr := reason.String()
+		revokeReasonStr = &reasonStr
+	}
+
 	query := `
 		UPDATE session_refresh_tokens SET
 			revoked = $2,
-			last_used_at = $3
+			last_used_at = $3,
+			revoke_reason = $4
 		WHERE id = $1
 	`
 
@@ -146,6 +180,7 @@ func (r *SessionRefreshTokenPostgresRepository) Update(ctx context.Context, toke
 		token.GetID(),
 		token.IsRevoked(),
 		token.GetLastUsedAtPtr(),
+		revokeReasonStr,
 	)
 
 	if err != nil {
@@ -188,6 +223,31 @@ func (r *SessionRefreshTokenPostgresRepository) Revoke(ctx context.Context, toke
 	return nil
 }
 
+// RevokeWithReason marks a session refresh token as revoked with a specific reason
+func (r *SessionRefreshTokenPostgresRepository) RevokeWithReason(ctx context.Context, tokenHash string, reason vo.RevokeReason) error {
+	reasonStr := reason.String()
+	query := `
+		UPDATE session_refresh_tokens SET revoked = true, revoke_reason = $2
+		WHERE token_hash = $1
+	`
+
+	result, err := r.db.ExecContext(ctx, query, tokenHash, reasonStr)
+	if err != nil {
+		return fmt.Errorf("failed to revoke session refresh token with reason: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("session refresh token not found")
+	}
+
+	return nil
+}
+
 // RevokeAllForUser revokes all session refresh tokens for a user
 func (r *SessionRefreshTokenPostgresRepository) RevokeAllForUser(ctx context.Context, userID string) error {
 	query := `
@@ -198,6 +258,22 @@ func (r *SessionRefreshTokenPostgresRepository) RevokeAllForUser(ctx context.Con
 	_, err := r.db.ExecContext(ctx, query, userID)
 	if err != nil {
 		return fmt.Errorf("failed to revoke all session refresh tokens for user: %w", err)
+	}
+
+	return nil
+}
+
+// RevokeAllForUserWithReason revokes all session refresh tokens for a user with a specific reason
+func (r *SessionRefreshTokenPostgresRepository) RevokeAllForUserWithReason(ctx context.Context, userID string, reason vo.RevokeReason) error {
+	reasonStr := reason.String()
+	query := `
+		UPDATE session_refresh_tokens SET revoked = true, revoke_reason = $2
+		WHERE user_id = $1 AND revoked = false
+	`
+
+	_, err := r.db.ExecContext(ctx, query, userID, reasonStr)
+	if err != nil {
+		return fmt.Errorf("failed to revoke all session refresh tokens for user with reason: %w", err)
 	}
 
 	return nil

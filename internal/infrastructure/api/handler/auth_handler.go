@@ -346,6 +346,21 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get refresh token from cookie to revoke it
+	var refreshToken string
+	if refreshCookie, err := r.Cookie("session_refresh_token"); err == nil {
+		refreshToken = refreshCookie.Value
+	}
+
+	// Revoke the session refresh token in the database
+	if refreshToken != "" {
+		req := usecase.LogoutRequest{
+			RefreshToken: refreshToken,
+		}
+		// Ignore errors as the token might already be revoked or expired
+		h.authUseCase.Logout(r.Context(), req)
+	}
+
 	// Clear the session token cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_token",

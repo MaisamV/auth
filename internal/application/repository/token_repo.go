@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+
 	"github.com/auth-service/internal/domain/entity"
+	"github.com/auth-service/internal/domain/vo"
 )
 
 // AuthorizationCodeRepository defines the interface for authorization code persistence
@@ -58,8 +60,14 @@ type SessionRefreshTokenRepository interface {
 	// Revoke marks a session refresh token as revoked
 	Revoke(ctx context.Context, tokenHash string) error
 
+	// RevokeWithReason marks a session refresh token as revoked with a specific reason
+	RevokeWithReason(ctx context.Context, tokenHash string, reason vo.RevokeReason) error
+
 	// RevokeAllForUser revokes all session refresh tokens for a user
 	RevokeAllForUser(ctx context.Context, userID string) error
+
+	// RevokeAllForUserWithReason revokes all session refresh tokens for a user with a specific reason
+	RevokeAllForUserWithReason(ctx context.Context, userID string, reason vo.RevokeReason) error
 
 	// DeleteExpired removes all expired session refresh tokens
 	DeleteExpired(ctx context.Context) error
