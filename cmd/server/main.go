@@ -52,6 +52,7 @@ func main() {
 	clientRepo := postgres.NewClientPostgresRepository(db)
 	authCodeRepo := postgres.NewAuthorizationCodePostgresRepository(db)
 	refreshTokenRepo := postgres.NewRefreshTokenPostgresRepository(db)
+	sessionRefreshTokenRepo := postgres.NewSessionRefreshTokenPostgresRepository(db)
 	blacklistRepo := redisRepo.NewTokenBlacklistRedisRepository(redisClient)
 
 	// Initialize services
@@ -69,6 +70,7 @@ func main() {
 		clientRepo,
 		authCodeRepo,
 		refreshTokenRepo,
+		sessionRefreshTokenRepo,
 		blacklistRepo,
 		hashingService,
 		tokenService,

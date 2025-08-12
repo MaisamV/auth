@@ -13,15 +13,16 @@ import (
 
 // AuthUseCase handles authentication-related business logic
 type AuthUseCase struct {
-	userRepo         repository.UserRepository
-	clientRepo       repository.ClientRepository
-	authCodeRepo     repository.AuthorizationCodeRepository
-	refreshTokenRepo repository.RefreshTokenRepository
-	blacklistRepo    repository.TokenBlacklistRepository
-	hashingService   service.HashingService
-	tokenService     service.TokenService
-	pkceService      service.PKCEService
-	idGenerator      service.IDGeneratorService
+	userRepo                repository.UserRepository
+	clientRepo              repository.ClientRepository
+	authCodeRepo            repository.AuthorizationCodeRepository
+	refreshTokenRepo        repository.RefreshTokenRepository
+	sessionRefreshTokenRepo repository.SessionRefreshTokenRepository
+	blacklistRepo           repository.TokenBlacklistRepository
+	hashingService          service.HashingService
+	tokenService            service.TokenService
+	pkceService             service.PKCEService
+	idGenerator             service.IDGeneratorService
 }
 
 // NewAuthUseCase creates a new AuthUseCase instance
@@ -30,6 +31,7 @@ func NewAuthUseCase(
 	clientRepo repository.ClientRepository,
 	authCodeRepo repository.AuthorizationCodeRepository,
 	refreshTokenRepo repository.RefreshTokenRepository,
+	sessionRefreshTokenRepo repository.SessionRefreshTokenRepository,
 	blacklistRepo repository.TokenBlacklistRepository,
 	hashingService service.HashingService,
 	tokenService service.TokenService,
@@ -37,15 +39,16 @@ func NewAuthUseCase(
 	idGenerator service.IDGeneratorService,
 ) *AuthUseCase {
 	return &AuthUseCase{
-		userRepo:         userRepo,
-		clientRepo:       clientRepo,
-		authCodeRepo:     authCodeRepo,
-		refreshTokenRepo: refreshTokenRepo,
-		blacklistRepo:    blacklistRepo,
-		hashingService:   hashingService,
-		tokenService:     tokenService,
-		pkceService:      pkceService,
-		idGenerator:      idGenerator,
+		userRepo:                userRepo,
+		clientRepo:              clientRepo,
+		authCodeRepo:            authCodeRepo,
+		refreshTokenRepo:        refreshTokenRepo,
+		sessionRefreshTokenRepo: sessionRefreshTokenRepo,
+		blacklistRepo:           blacklistRepo,
+		hashingService:          hashingService,
+		tokenService:            tokenService,
+		pkceService:             pkceService,
+		idGenerator:             idGenerator,
 	}
 }
 
@@ -100,10 +103,26 @@ func (uc *AuthUseCase) LoginUser(ctx context.Context, req LoginUserRequest) (*Lo
 		return nil, fmt.Errorf("failed to generate session token: %w", err)
 	}
 
-	// Generate session refresh token (30 days expiry)
-	sessionRefreshToken, err := uc.tokenService.GenerateSessionRefreshToken(user.ID)
+	// Generate session refresh token entity
+	sessionRefreshTokenEntity, err := uc.tokenService.GenerateSessionRefreshToken(user.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate session refresh token: %w", err)
+	}
+
+	// Convert entity to JWT string for response
+	sessionRefreshToken, err := sessionRefreshTokenEntity.ToJwt(uc.tokenService)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert session refresh token to JWT: %w", err)
+	}
+
+	hash, err := uc.tokenService.HashToken(sessionRefreshToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash session refresh token: %w", err)
+	}
+
+	// Save session refresh token to database
+	if err := uc.sessionRefreshTokenRepo.Save(ctx, sessionRefreshTokenEntity, hash); err != nil {
+		return nil, fmt.Errorf("failed to save session refresh token: %w", err)
 	}
 
 	return &LoginUserResponse{
@@ -525,10 +544,40 @@ type RefreshSessionTokenResponse struct {
 
 // RefreshSessionToken refreshes a session token using a refresh token
 func (uc *AuthUseCase) RefreshSessionToken(ctx context.Context, req RefreshSessionTokenRequest) (*RefreshSessionTokenResponse, error) {
-	// Validate refresh token
+	// First validate the JWT structure and extract user ID
 	userID, err := uc.tokenService.ValidateSessionRefreshToken(req.RefreshToken)
 	if err != nil {
 		return nil, fmt.Errorf("invalid refresh token: %w", err)
+	}
+
+	// Hash the provided token to check against database
+	tokenHash, err := uc.tokenService.HashToken(req.RefreshToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash refresh token: %w", err)
+	}
+
+	// Find the session refresh token in database
+	sessionRefreshToken, err := uc.sessionRefreshTokenRepo.FindByTokenHash(ctx, tokenHash)
+	if err != nil {
+		return nil, fmt.Errorf("invalid refresh token: token not found in database")
+	}
+
+	// Validate the token (check expiry, revocation, user match)
+	if sessionRefreshToken.IsExpired() {
+		return nil, fmt.Errorf("refresh token has expired")
+	}
+	if sessionRefreshToken.IsRevoked() {
+		return nil, fmt.Errorf("refresh token has been revoked")
+	}
+	if sessionRefreshToken.GetUserID() != userID {
+		return nil, fmt.Errorf("refresh token does not belong to the user")
+	}
+
+	// Mark the current token as used
+	sessionRefreshToken.MarkAsUsed()
+	sessionRefreshToken.Revoke()
+	if err := uc.sessionRefreshTokenRepo.Update(ctx, sessionRefreshToken); err != nil {
+		return nil, fmt.Errorf("failed to update session refresh token: %w", err)
 	}
 
 	// Generate new session token (1 hour expiry)
@@ -537,10 +586,26 @@ func (uc *AuthUseCase) RefreshSessionToken(ctx context.Context, req RefreshSessi
 		return nil, fmt.Errorf("failed to generate new session token: %w", err)
 	}
 
-	// Generate new session refresh token (30 days expiry)
-	newSessionRefreshToken, err := uc.tokenService.GenerateSessionRefreshToken(userID)
+	// Generate new session refresh token entity
+	newSessionRefreshTokenEntity, err := uc.tokenService.GenerateSessionRefreshToken(userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate new session refresh token: %w", err)
+	}
+
+	// Convert entity to JWT string for response
+	newSessionRefreshToken, err := newSessionRefreshTokenEntity.ToJwt(uc.tokenService)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert new session refresh token to JWT: %w", err)
+	}
+
+	hash, err := uc.tokenService.HashToken(newSessionRefreshToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash session refresh token: %w", err)
+	}
+
+	// Save new session refresh token to database
+	if err := uc.sessionRefreshTokenRepo.Save(ctx, newSessionRefreshTokenEntity, hash); err != nil {
+		return nil, fmt.Errorf("failed to save new session refresh token: %w", err)
 	}
 
 	return &RefreshSessionTokenResponse{
