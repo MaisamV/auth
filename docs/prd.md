@@ -45,7 +45,7 @@ This microservice will solve these problems by providing a single, robust, and s
 
 | Persona | Description | User Stories |
 | :---- | :---- | :---- |
-| **Instagram Page Owner** | Our primary end-user who signs up and uses our dashboard. | \- As an Instagram Page Owner, I want to create an account with my email and password so I can use the service.\<br\>- As an Instagram Page Owner, I want to log in securely to access my dashboard.\<br\>- As an Instagram Page Owner, I want to remain logged in for an extended period so I don't have to re-enter my password frequently.\<br\>- As an Instagram Page Owner, I want my session to be terminated on all devices if I change my password. |
+| **Instagram Page Owner** | Our primary end-user who signs up and uses our dashboard. | \- As an Instagram Page Owner, I want to create an account with my email and password so I can use the service.\<br\>- As an Instagram Page Owner, I want to log in securely to access my dashboard.\<br\>- As an Instagram Page Owner, I want to remain logged in for an extended period so I don't have to re-enter my password frequently.\<br\>- As an Instagram Page Owner, I want to change my password securely by providing my current password.\<br\>- As an Instagram Page Owner, I want my session to be terminated on all devices if I change my password. |
 | **Frontend Developer** | Builds the user-facing dashboard. | \- As a Frontend Developer, I need a simple and secure way to authenticate users and manage their sessions.\<br\>- As a Frontend Developer, I need to refresh an expired access token without forcing the user to log in again. |
 | **Backend Developer** | Builds other microservices (e.g., messaging, billing). | \- As a Backend Developer, I need a reliable way to protect my API endpoints and verify that incoming requests are from an authenticated user.\<br\>- As a Backend Developer, I need to get the user's unique ID from a token to process their request. |
 | **System Administrator** | Manages the platform's infrastructure and security. | \- As a System Administrator, I need the ability to immediately revoke a user's access across the entire platform if their account is compromised. |
@@ -57,6 +57,7 @@ This microservice will be responsible for:
 
 * User registration (email/password).  
 * User login and credential verification.  
+* Password management (secure password changes with current password verification).  
 * Issuing, validating, and refreshing OAuth 2.0 tokens (Access & Refresh Tokens).  
 * Supporting specific OAuth 2.0 grant types (see FEATURES.md).  
 * Providing secure endpoints for token management.  

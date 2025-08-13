@@ -13,7 +13,11 @@ This document specifies the concrete features and the OAuth 2.0 grant types that
 * **User Login:**  
   * Endpoint for authenticating users with email and password.  
   * Sets secure session cookies for maintaining user authentication state.  
-  * Integrates with OAuth 2.0 authorization flow for seamless user experience.  
+  * Integrates with OAuth 2.0 authorization flow for seamless user experience.
+* **Password Management:**  
+  * Endpoint for authenticated users to change their password.  
+  * Requires current password verification for security.  
+  * Automatically revokes all existing session tokens upon successful password change.  
 * **Token Issuance:**  
   * Generate JWTs (JSON Web Tokens) as Access Tokens.  
   * Generate opaque, random strings for Refresh Tokens, which are stored in the database.  

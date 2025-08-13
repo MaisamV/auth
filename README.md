@@ -77,6 +77,7 @@ The primary endpoints are:
 **Authentication:**
 * POST /auth/register: Register a new user account
 * POST /auth/login: Authenticate user and establish session
+* PUT /auth/change-password: Change user password (requires authentication)
 
 **OAuth 2.0:**
 * GET /oauth/authorize: Initiates the authorization code flow
