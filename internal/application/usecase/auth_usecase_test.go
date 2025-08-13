@@ -82,6 +82,7 @@ func TestAuthUseCase_RegisterUser(t *testing.T) {
 		nil, // clientRepo not needed for this test
 		nil, // authCodeRepo not needed for this test
 		nil, // refreshTokenRepo not needed for this test
+		nil, // sessionRefreshTokenRepo not needed for this test
 		nil, // blacklistRepo not needed for this test
 		mockHashingService,
 		nil, // tokenService not needed for this test
@@ -125,7 +126,7 @@ func TestAuthUseCase_RegisterUser_EmailAlreadyExists(t *testing.T) {
 
 	authUseCase := usecase.NewAuthUseCase(
 		mockUserRepo,
-		nil, nil, nil, nil,
+		nil, nil, nil, nil, nil,
 		mockHashingService,
 		nil, nil,
 		mockIDGenerator,
@@ -161,7 +162,7 @@ func TestAuthUseCase_RegisterUser_InvalidEmail(t *testing.T) {
 
 	authUseCase := usecase.NewAuthUseCase(
 		mockUserRepo,
-		nil, nil, nil, nil,
+		nil, nil, nil, nil, nil,
 		mockHashingService,
 		nil, nil,
 		mockIDGenerator,

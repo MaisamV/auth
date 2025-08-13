@@ -410,14 +410,88 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"message": "Logged out successfully"})
 }
 
-// extractBearerToken extracts the bearer token from the Authorization header
+// ChangePassword handles password change requests
+func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract user ID from session token
+	sessionToken, err := r.Cookie("session_token")
+	if err != nil {
+		// Try Authorization header as fallback
+		authHeader := r.Header.Get("Authorization")
+		token := extractBearerToken(authHeader)
+		if token == "" {
+			http.Error(w, "Authentication required", http.StatusUnauthorized)
+			return
+		}
+		sessionToken = &http.Cookie{Value: token}
+	}
+
+	// Validate session token and extract user ID
+	userID, err := h.authUseCase.ValidateSessionToken(r.Context(), sessionToken.Value)
+	if err != nil {
+		http.Error(w, "Invalid or expired session token", http.StatusUnauthorized)
+		return
+	}
+
+	// Parse request body
+	var req usecase.ChangePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Change password
+	if err := h.authUseCase.ChangePassword(r.Context(), userID, req); err != nil {
+		if strings.Contains(err.Error(), "current password is incorrect") {
+			http.Error(w, "Current password is incorrect", http.StatusBadRequest)
+			return
+		}
+		if strings.Contains(err.Error(), "must be at least 8 characters") {
+			http.Error(w, "New password must be at least 8 characters long", http.StatusBadRequest)
+			return
+		}
+		http.Error(w, "Failed to change password", http.StatusInternalServerError)
+		return
+	}
+
+	// Clear session cookies to force re-authentication
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   false, // Set to true in production with HTTPS
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_refresh_token",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   false, // Set to true in production with HTTPS
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"message":"Password changed successfully. Please log in again."}`))
+}
+
+// extractBearerToken extracts the token from the Authorization header
 func extractBearerToken(authHeader string) string {
 	if authHeader == "" {
 		return ""
 	}
 
-	parts := strings.SplitN(authHeader, " ", 2)
-	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 || parts[0] != "Bearer" {
 		return ""
 	}
 

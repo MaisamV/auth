@@ -188,6 +188,63 @@ paths:
         '405':
           description: Method not allowed
 
+  /auth/change-password:
+    post:
+      summary: Change user password
+      description: Changes the authenticated user's password and revokes all their tokens
+      security:
+        - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - current_password
+                - new_password
+              properties:
+                current_password:
+                  type: string
+                  description: User's current password
+                  example: oldpassword123
+                new_password:
+                  type: string
+                  minLength: 8
+                  description: New password (minimum 8 characters)
+                  example: newpassword123
+      responses:
+        '200':
+          description: Password changed successfully
+          headers:
+            Set-Cookie:
+              description: Cleared session cookies to force re-authentication
+              schema:
+                type: string
+                example: session_token=; Path=/; HttpOnly; SameSite=Strict; Max-Age=-1
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Password changed successfully. Please log in again.
+        '400':
+          description: Bad request (current password incorrect, new password too weak, etc.)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Current password is incorrect
+        '401':
+          description: Authentication required or invalid session token
+        '500':
+          description: Internal server error
+
   /oauth/authorize:
     get:
       summary: OAuth 2.0 authorization endpoint

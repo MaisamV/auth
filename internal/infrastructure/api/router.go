@@ -102,6 +102,8 @@ func NewRouter(authHandler *handler.AuthHandler) *chi.Mux {
 		r.HandleFunc("/refresh", authHandler.RefreshSession)
 		// User logout
 		r.HandleFunc("/logout", authHandler.Logout)
+		// Change password
+		r.HandleFunc("/change-password", authHandler.ChangePassword)
 	})
 
 	// Health check endpoint

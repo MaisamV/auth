@@ -672,6 +672,65 @@ func (uc *AuthUseCase) Logout(ctx context.Context, req LogoutRequest) error {
 	return nil
 }
 
+// ChangePasswordRequest represents the request to change a user's password
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
+// ChangePassword changes a user's password and revokes all their tokens
+func (uc *AuthUseCase) ChangePassword(ctx context.Context, userID string, req ChangePasswordRequest) error {
+	if req.CurrentPassword == "" {
+		return fmt.Errorf("current password is required")
+	}
+	if req.NewPassword == "" {
+		return fmt.Errorf("new password is required")
+	}
+	if len(req.NewPassword) < 8 {
+		return fmt.Errorf("new password must be at least 8 characters long")
+	}
+
+	// Get the user to verify current password
+	user, err := uc.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("user not found: %w", err)
+	}
+
+	// Verify current password
+	if err := uc.hashingService.Verify(req.CurrentPassword, user.Password); err != nil {
+		return fmt.Errorf("current password is incorrect")
+	}
+
+	// Hash the new password
+	hashedNewPassword, err := uc.hashingService.Hash(req.NewPassword)
+	if err != nil {
+		return fmt.Errorf("failed to hash new password: %w", err)
+	}
+
+	// Update password in database
+	if err := uc.userRepo.UpdatePassword(ctx, userID, hashedNewPassword); err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
+
+	// Revoke all refresh tokens for this user with PASS_CHANGE reason
+	if err := uc.refreshTokenRepo.RevokeAllForUserWithReason(ctx, userID, vo.RevokeReasonPassChange); err != nil {
+		// Log error but don't fail the password change
+		// The password has already been updated successfully
+		fmt.Printf("Warning: failed to revoke OAuth refresh tokens for user %s: %v\n", userID, err)
+	}
+
+	// Revoke all session refresh tokens for this user with PASS_CHANGE reason
+	if err := uc.sessionRefreshTokenRepo.RevokeAllForUserWithReason(ctx, userID, vo.RevokeReasonPassChange); err != nil {
+		// Log error but don't fail the password change
+		// The password has already been updated successfully
+		fmt.Printf("Warning: failed to revoke session refresh tokens for user %s: %v\n", userID, err)
+	}
+
+	return nil
+}
+
+
+
 // GetPublicKey returns the public key for JWT verification
 func (uc *AuthUseCase) GetPublicKey() (interface{}, error) {
 	return uc.tokenService.GetPublicKey()
