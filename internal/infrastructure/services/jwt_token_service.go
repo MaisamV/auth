@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
@@ -18,13 +17,18 @@ import (
 
 // JWTTokenService implements the TokenService interface using JWT
 type JWTTokenService struct {
-	privateKey *ecdsa.PrivateKey
-	publicKey  *ecdsa.PublicKey
-	issuer     string
+	privateKey                *ecdsa.PrivateKey
+	publicKey                 *ecdsa.PublicKey
+	issuer                    string
+	accessTokenExpiry         time.Duration
+	refreshTokenExpiry        time.Duration
+	authorizationCodeExpiry   time.Duration
+	sessionTokenExpiry        time.Duration
+	sessionRefreshTokenExpiry time.Duration
 }
 
 // NewJWTTokenService creates a new JWTTokenService
-func NewJWTTokenService(privateKeyPEM, issuer string) (service.TokenService, error) {
+func NewJWTTokenService(privateKeyPEM, issuer string, accessTokenExpiry, refreshTokenExpiry, authorizationCodeExpiry, sessionTokenExpiry, sessionRefreshTokenExpiry time.Duration) (service.TokenService, error) {
 	// Parse private key
 	block, _ := pem.Decode([]byte(privateKeyPEM))
 	if block == nil {
@@ -40,9 +44,14 @@ func NewJWTTokenService(privateKeyPEM, issuer string) (service.TokenService, err
 			return nil, fmt.Errorf("failed to parse private key: %w", err)
 		}
 		return &JWTTokenService{
-			privateKey: privateKey,
-			publicKey:  &privateKey.PublicKey,
-			issuer:     issuer,
+			privateKey:                privateKey,
+			publicKey:                 &privateKey.PublicKey,
+			issuer:                    issuer,
+			accessTokenExpiry:         accessTokenExpiry,
+			refreshTokenExpiry:        refreshTokenExpiry,
+			authorizationCodeExpiry:   authorizationCodeExpiry,
+			sessionTokenExpiry:        sessionTokenExpiry,
+			sessionRefreshTokenExpiry: sessionRefreshTokenExpiry,
 		}, nil
 	}
 
@@ -52,9 +61,14 @@ func NewJWTTokenService(privateKeyPEM, issuer string) (service.TokenService, err
 	}
 
 	return &JWTTokenService{
-		privateKey: privateKey,
-		publicKey:  &privateKey.PublicKey,
-		issuer:     issuer,
+		privateKey:                privateKey,
+		publicKey:                 &privateKey.PublicKey,
+		issuer:                    issuer,
+		accessTokenExpiry:         accessTokenExpiry,
+		refreshTokenExpiry:        refreshTokenExpiry,
+		authorizationCodeExpiry:   authorizationCodeExpiry,
+		sessionTokenExpiry:        sessionTokenExpiry,
+		sessionRefreshTokenExpiry: sessionRefreshTokenExpiry,
 	}, nil
 }
 
@@ -235,9 +249,7 @@ func (s *JWTTokenService) ValidateSessionToken(tokenString string) (string, erro
 }
 
 // GenerateSessionRefreshToken creates a refresh token for session renewal
-func (s *JWTTokenService) GenerateSessionRefreshToken(userID string) (*entity.SessionRefreshToken, error) {
-	expiresIn := 30 * 24 * time.Hour // 1 month
-
+func (s *JWTTokenService) GenerateSessionRefreshToken(userID string, expiresIn time.Duration) (*entity.SessionRefreshToken, error) {
 	// Generate a unique token ID
 	tokenID, err := s.generateRandomString(16)
 	if err != nil {
@@ -329,5 +341,30 @@ func (s *JWTTokenService) generateRandomString(length int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return base64.URLEncoding.EncodeToString(bytes)[:length], nil
+	return hex.EncodeToString(bytes), nil
+}
+
+// GetAccessTokenExpiry returns the configured access token expiry duration
+func (s *JWTTokenService) GetAccessTokenExpiry() time.Duration {
+	return s.accessTokenExpiry
+}
+
+// GetRefreshTokenExpiry returns the configured refresh token expiry duration
+func (s *JWTTokenService) GetRefreshTokenExpiry() time.Duration {
+	return s.refreshTokenExpiry
+}
+
+// GetAuthorizationCodeExpiry returns the configured authorization code expiry duration
+func (s *JWTTokenService) GetAuthorizationCodeExpiry() time.Duration {
+	return s.authorizationCodeExpiry
+}
+
+// GetSessionTokenExpiry returns the configured session token expiry duration
+func (s *JWTTokenService) GetSessionTokenExpiry() time.Duration {
+	return s.sessionTokenExpiry
+}
+
+// GetSessionRefreshTokenExpiry returns the configured session refresh token expiry duration
+func (s *JWTTokenService) GetSessionRefreshTokenExpiry() time.Duration {
+	return s.sessionRefreshTokenExpiry
 }

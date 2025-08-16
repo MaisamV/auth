@@ -35,7 +35,7 @@ type TokenService interface {
 	ValidateSessionToken(token string) (string, error)
 
 	// GenerateSessionRefreshToken creates a refresh token for session renewal
-	GenerateSessionRefreshToken(userID string) (*entity.SessionRefreshToken, error)
+	GenerateSessionRefreshToken(userID string, expiresIn time.Duration) (*entity.SessionRefreshToken, error)
 
 	// GenerateSessionRefreshTokenJWT creates a JWT string from session refresh token data
 	GenerateSessionRefreshTokenJWT(session *entity.SessionRefreshToken) (string, error)
@@ -48,6 +48,13 @@ type TokenService interface {
 
 	// GetPublicKey returns the public key for JWT verification
 	GetPublicKey() (interface{}, error)
+
+	// Configuration getters
+	GetAccessTokenExpiry() time.Duration
+	GetRefreshTokenExpiry() time.Duration
+	GetAuthorizationCodeExpiry() time.Duration
+	GetSessionTokenExpiry() time.Duration
+	GetSessionRefreshTokenExpiry() time.Duration
 }
 
 // TokenClaims represents the claims in a JWT token
