@@ -15,10 +15,15 @@ issuer: "https://auth.example.com"
 # Security settings
 bcrypt_cost: 12
 
+# Cookie security settings
+cookie_secure: false  # Set to true in production with HTTPS
+
 # Token expiration settings
 access_token_expiry: "15m"  # 15 minutes
 refresh_token_expiry: "720h" # 30 days
 authorization_code_expiry: "10m" # 10 minutes
+session_token_expiry: "24h" # 24 hours
+session_refresh_token_expiry: "4320h" # 6 months (180 days)
 
 # Rate limiting (future implementation)
 rate_limit:

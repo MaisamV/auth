@@ -57,7 +57,15 @@ func main() {
 
 	// Initialize services
 	hashingService := hasher.NewBcryptHasher(12) // Cost of 12 for production
-	tokenService, err := services.NewJWTTokenService(privateKey, config.Issuer)
+	tokenService, err := services.NewJWTTokenService(
+		privateKey,
+		config.Issuer,
+		config.AccessTokenExpiry,
+		config.RefreshTokenExpiry,
+		config.AuthorizationCodeExpiry,
+		config.SessionTokenExpiry,
+		config.SessionRefreshTokenExpiry,
+	)
 	if err != nil {
 		log.Fatalf("Failed to initialize token service: %v", err)
 	}
@@ -79,7 +87,7 @@ func main() {
 	)
 
 	// Initialize handlers
-	authHandler := handler.NewAuthHandler(authUseCase)
+	authHandler := handler.NewAuthHandler(authUseCase, tokenService, config.CookieSecure)
 
 	// Initialize router
 	router := api.NewRouter(authHandler)
@@ -120,10 +128,16 @@ func main() {
 
 // Config holds the application configuration
 type Config struct {
-	Port        string
-	DatabaseURL string
-	RedisURL    string
-	Issuer      string
+	Port                        string
+	DatabaseURL                 string
+	RedisURL                    string
+	Issuer                      string
+	AccessTokenExpiry           time.Duration
+	RefreshTokenExpiry          time.Duration
+	AuthorizationCodeExpiry     time.Duration
+	SessionTokenExpiry          time.Duration
+	SessionRefreshTokenExpiry   time.Duration
+	CookieSecure                bool
 }
 
 // loadConfig loads configuration from environment variables and config files
@@ -138,6 +152,12 @@ func loadConfig() *Config {
 	viper.SetDefault("database_url", "postgres://user:password@localhost:5432/authdb?sslmode=disable")
 	viper.SetDefault("redis_url", "redis://localhost:6379")
 	viper.SetDefault("issuer", "https://auth.example.com")
+	viper.SetDefault("access_token_expiry", "15m")
+	viper.SetDefault("refresh_token_expiry", "720h")
+	viper.SetDefault("authorization_code_expiry", "10m")
+	viper.SetDefault("session_token_expiry", "24h")
+	viper.SetDefault("session_refresh_token_expiry", "4320h")
+	viper.SetDefault("cookie_secure", false)
 
 	// Read from environment variables
 	viper.AutomaticEnv()
@@ -147,11 +167,48 @@ func loadConfig() *Config {
 		log.Printf("No config file found, using defaults and environment variables: %v", err)
 	}
 
+	// Parse duration strings
+	accessTokenExpiry, err := time.ParseDuration(viper.GetString("access_token_expiry"))
+	if err != nil {
+		log.Printf("Invalid access_token_expiry format, using default: %v", err)
+		accessTokenExpiry = 15 * time.Minute
+	}
+
+	refreshTokenExpiry, err := time.ParseDuration(viper.GetString("refresh_token_expiry"))
+	if err != nil {
+		log.Printf("Invalid refresh_token_expiry format, using default: %v", err)
+		refreshTokenExpiry = 720 * time.Hour
+	}
+
+	authorizationCodeExpiry, err := time.ParseDuration(viper.GetString("authorization_code_expiry"))
+	if err != nil {
+		log.Printf("Invalid authorization_code_expiry format, using default: %v", err)
+		authorizationCodeExpiry = 10 * time.Minute
+	}
+
+	sessionTokenExpiry, err := time.ParseDuration(viper.GetString("session_token_expiry"))
+	if err != nil {
+		log.Printf("Invalid session_token_expiry format, using default: %v", err)
+		sessionTokenExpiry = 24 * time.Hour
+	}
+
+	sessionRefreshTokenExpiry, err := time.ParseDuration(viper.GetString("session_refresh_token_expiry"))
+	if err != nil {
+		log.Printf("Invalid session_refresh_token_expiry format, using default: %v", err)
+		sessionRefreshTokenExpiry = 4320 * time.Hour
+	}
+
 	return &Config{
-		Port:        viper.GetString("port"),
-		DatabaseURL: viper.GetString("database_url"),
-		RedisURL:    viper.GetString("redis_url"),
-		Issuer:      viper.GetString("issuer"),
+		Port:                        viper.GetString("port"),
+		DatabaseURL:                 viper.GetString("database_url"),
+		RedisURL:                    viper.GetString("redis_url"),
+		Issuer:                      viper.GetString("issuer"),
+		AccessTokenExpiry:           accessTokenExpiry,
+		RefreshTokenExpiry:          refreshTokenExpiry,
+		AuthorizationCodeExpiry:     authorizationCodeExpiry,
+		SessionTokenExpiry:          sessionTokenExpiry,
+		SessionRefreshTokenExpiry:   sessionRefreshTokenExpiry,
+		CookieSecure:                viper.GetBool("cookie_secure"),
 	}
 }
 

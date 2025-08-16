@@ -6,20 +6,65 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/auth-service/internal/application/service"
 	"github.com/auth-service/internal/application/usecase"
 )
 
 // AuthHandler handles HTTP requests for authentication endpoints
 type AuthHandler struct {
-	authUseCase *usecase.AuthUseCase
+	authUseCase  *usecase.AuthUseCase
+	tokenService service.TokenService
+	cookieSecure bool
 }
 
 // NewAuthHandler creates a new AuthHandler
-func NewAuthHandler(authUseCase *usecase.AuthUseCase) *AuthHandler {
+func NewAuthHandler(authUseCase *usecase.AuthUseCase, tokenService service.TokenService, cookieSecure bool) *AuthHandler {
 	return &AuthHandler{
-		authUseCase: authUseCase,
+		authUseCase:  authUseCase,
+		tokenService: tokenService,
+		cookieSecure: cookieSecure,
 	}
+}
+
+// setSessionCookies sets both session token and session refresh token cookies
+func (h *AuthHandler) setSessionCookies(w http.ResponseWriter, sessionToken, sessionRefreshToken string) {
+	// Calculate session token expiration time
+	expirationTime := time.Now().UTC().Add(h.tokenService.GetSessionTokenExpiry())
+
+	// Set secure JWT session cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    sessionToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   h.cookieSecure,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   int(h.tokenService.GetSessionTokenExpiry().Seconds()),
+	})
+
+	// Set secure session refresh token cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_refresh_token",
+		Value:    sessionRefreshToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   h.cookieSecure,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   int(h.tokenService.GetSessionRefreshTokenExpiry().Seconds()),
+	})
+
+	// Set token expiration time cookie (accessible to JavaScript)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token_expires_at",
+		Value:    expirationTime.Format(time.RFC3339),
+		Path:     "/",
+		HttpOnly: false, // Accessible to JavaScript
+		Secure:   h.cookieSecure,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   int(h.tokenService.GetSessionTokenExpiry().Seconds()),
+	})
 }
 
 // Register handles user registration
@@ -41,27 +86,8 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set secure JWT session cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_token",
-		Value:    resp.SessionToken,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   false, // Set to true in production with HTTPS
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   3600, // 1 hour (matches JWT expiry)
-	})
-
-	// Set secure session refresh token cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_refresh_token",
-		Value:    resp.SessionRefreshToken,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   false, // Set to true in production with HTTPS
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   15552000, // 6 months (matches refresh token expiry)
-	})
+	// Set session cookies
+	h.setSessionCookies(w, resp.SessionToken, resp.SessionRefreshToken)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -87,27 +113,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set secure JWT session cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_token",
-		Value:    resp.SessionToken,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   false, // Set to true in production with HTTPS
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   3600, // 1 hour (matches JWT expiry)
-	})
-
-	// Set secure session refresh token cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_refresh_token",
-		Value:    resp.SessionRefreshToken,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   false, // Set to true in production with HTTPS
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   15552000, // 6 months (matches refresh token expiry)
-	})
+	// Set session cookies
+	h.setSessionCookies(w, resp.SessionToken, resp.SessionRefreshToken)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
@@ -277,7 +284,7 @@ func (h *AuthHandler) JWKS(w http.ResponseWriter, r *http.Request) {
 	// Extract x and y coordinates and encode them as base64url
 	xBytes := publicKey.X.Bytes()
 	yBytes := publicKey.Y.Bytes()
-	
+
 	// Pad to 32 bytes for P-256 curve
 	if len(xBytes) < 32 {
 		padded := make([]byte, 32)
@@ -331,31 +338,34 @@ func (h *AuthHandler) RefreshSession(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.authUseCase.RefreshSessionToken(r.Context(), req)
 	if err != nil {
+		// Clear the session token cookie
+		http.SetCookie(w, &http.Cookie{
+			Name:     "session_token",
+			Value:    "",
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   false, // Set to true in production with HTTPS
+			SameSite: http.SameSiteLaxMode,
+			MaxAge:   -1, // Delete the cookie
+		})
+
+		// Clear the session refresh token cookie
+		http.SetCookie(w, &http.Cookie{
+			Name:     "session_refresh_token",
+			Value:    "",
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   false, // Set to true in production with HTTPS
+			SameSite: http.SameSiteLaxMode,
+			MaxAge:   -1, // Delete the cookie
+		})
+
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	// Set new session token cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_token",
-		Value:    resp.SessionToken,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   false, // Set to true in production with HTTPS
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   3600, // 1 hour
-	})
-
-	// Set new refresh token cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_refresh_token",
-		Value:    resp.SessionRefreshToken,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   false, // Set to true in production with HTTPS
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   15552000, // 6 months
-	})
+	// Set new session cookies
+	h.setSessionCookies(w, resp.SessionToken, resp.SessionRefreshToken)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
