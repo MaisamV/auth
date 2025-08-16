@@ -36,7 +36,8 @@ This document outlines the chosen technology stack for the OAuth 2.0 Authenticat
 ## **Configuration Management**
 
 * **spf13/viper**  
-  * **Justification:** Viper provides a comprehensive solution for managing application configuration. It can read from environment variables, config files (YAML, JSON, etc.), and remote config systems, giving us flexibility in different deployment environments.
+  * **Justification:** Viper provides a comprehensive solution for managing application configuration. It can read from environment variables, config files (YAML, JSON, etc.), and remote config systems, giving us flexibility in different deployment environments.  
+  * **Features:** Supports configurable security settings including cookie secure flags, token expiration times, and other runtime parameters for different deployment environments.
 
 ## **Testing**
 

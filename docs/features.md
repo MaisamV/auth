@@ -9,10 +9,13 @@ This document specifies the concrete features and the OAuth 2.0 grant types that
 
 * **User Registration:**  
   * Endpoint for creating a new user with an email and password.  
-  * Passwords must be securely hashed using a modern, strong algorithm (e.g., Argon2id or bcrypt).
+  * Passwords must be securely hashed using a modern, strong algorithm (e.g., Argon2id or bcrypt).  
+  * Returns session token expiration time in API responses for client-side session management.
 * **User Login:**  
   * Endpoint for authenticating users with email and password.  
   * Sets secure session cookies for maintaining user authentication state.  
+  * Configurable cookie security settings via configuration file.  
+  * Returns session token expiration time in API responses for client-side session management.  
   * Integrates with OAuth 2.0 authorization flow for seamless user experience.
 * **Password Management:**  
   * Endpoint for authenticated users to change their password.  
@@ -26,6 +29,8 @@ This document specifies the concrete features and the OAuth 2.0 grant types that
   * This allows other services to verify tokens without calling the auth service, improving performance and resilience.  
 * **Token Refresh:**  
   * Endpoint to exchange a valid (non-expired, non-revoked) Refresh Token for a new Access Token.  
+  * Returns session token expiration time in API responses for client-side session management.  
+  * Configurable token expiration times via configuration file.  
 * **Token Revocation:**  
   * Endpoint to revoke a Refresh Token. Revoking a refresh token should immediately invalidate it.  
   * This is critical for logging users out and handling security events.

@@ -47,9 +47,12 @@ This project is defined by a series of detailed documents to ensure consistency 
 2. **Install dependencies:**  
    go mod tidy
 
-3. Set up environment variables:  
-   Copy the .env.example file to .env and populate it with your configuration, especially the database connection string.  
-   cp .env.example .env
+3. Set up configuration:  
+   Review and modify configs/config.yml for your environment. Key settings include:  
+   - Database and Redis connection strings  
+   - Cookie security settings (set cookie_secure: true for production)  
+   - Token expiration times  
+   - Security parameters
 
 4. Start the database:  
    A docker-compose.yml file is provided to easily run a PostgreSQL instance.  
@@ -64,6 +67,25 @@ go run cmd/server/main.go
 
 The server will start on the port specified in your .env file (default: 8080).
 
+### **Configuration**
+
+The service uses `configs/config.yml` for configuration. Key settings include:
+
+* **Security Settings:**
+  * `cookie_secure`: Set to `true` in production with HTTPS
+  * `bcrypt_cost`: Password hashing cost (default: 12)
+
+* **Token Expiration:**
+  * `session_token_expiry`: Session token lifetime (default: 24h)
+  * `session_refresh_token_expiry`: Session refresh token lifetime (default: 6 months)
+  * `access_token_expiry`: OAuth access token lifetime (default: 15m)
+  * `refresh_token_expiry`: OAuth refresh token lifetime (default: 30 days)
+  * `authorization_code_expiry`: Authorization code lifetime (default: 10m)
+
+* **Database & Redis:**
+  * `database_url`: PostgreSQL connection string
+  * `redis_url`: Redis connection string
+
 ### **Running Tests**
 
 To run all unit tests and check coverage:
@@ -75,8 +97,9 @@ go test ./... \-cover
 The primary endpoints are:
 
 **Authentication:**
-* POST /auth/register: Register a new user account
-* POST /auth/login: Authenticate user and establish session
+* POST /auth/register: Register a new user account (returns session token expiration time)
+* POST /auth/login: Authenticate user and establish session (returns session token expiration time)
+* POST /auth/refresh: Refresh session tokens (returns session token expiration time)
 * PUT /auth/change-password: Change user password (requires authentication)
 
 **OAuth 2.0:**
