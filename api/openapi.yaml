@@ -81,6 +81,11 @@ paths:
                   session_refresh_token:
                     type: string
                     description: JWT refresh token (6 months expiry)
+                  session_token_expires_at:
+                    type: string
+                    format: date-time
+                    description: UTC expiration time of the session token in RFC3339 format
+                    example: "2024-01-15T14:30:00Z"
         '400':
           description: Bad request (invalid email, weak password, etc.)
         '409':
@@ -128,6 +133,17 @@ paths:
                   email:
                     type: string
                     example: user@example.com
+                  session_token:
+                    type: string
+                    description: JWT session token (1 hour expiry)
+                  session_refresh_token:
+                    type: string
+                    description: JWT refresh token (6 months expiry)
+                  session_token_expires_at:
+                    type: string
+                    format: date-time
+                    description: UTC expiration time of the session token in RFC3339 format
+                    example: "2024-01-15T14:30:00Z"
         '401':
           description: Invalid credentials
         '400':
@@ -158,6 +174,11 @@ paths:
                   session_refresh_token:
                     type: string
                     description: New refresh token
+                  session_token_expires_at:
+                    type: string
+                    format: date-time
+                    description: UTC expiration time of the session token in RFC3339 format
+                    example: "2024-01-15T14:30:00Z"
         '401':
           description: Invalid or missing refresh token
         '400':
