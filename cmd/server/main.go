@@ -128,16 +128,16 @@ func main() {
 
 // Config holds the application configuration
 type Config struct {
-	Port                        string
-	DatabaseURL                 string
-	RedisURL                    string
-	Issuer                      string
-	AccessTokenExpiry           time.Duration
-	RefreshTokenExpiry          time.Duration
-	AuthorizationCodeExpiry     time.Duration
-	SessionTokenExpiry          time.Duration
-	SessionRefreshTokenExpiry   time.Duration
-	CookieSecure                bool
+	Port                      string
+	DatabaseURL               string
+	RedisURL                  string
+	Issuer                    string
+	AccessTokenExpiry         time.Duration
+	RefreshTokenExpiry        time.Duration
+	AuthorizationCodeExpiry   time.Duration
+	SessionTokenExpiry        time.Duration
+	SessionRefreshTokenExpiry time.Duration
+	CookieSecure              bool
 }
 
 // loadConfig loads configuration from environment variables and config files
@@ -157,7 +157,7 @@ func loadConfig() *Config {
 	viper.SetDefault("authorization_code_expiry", "10m")
 	viper.SetDefault("session_token_expiry", "24h")
 	viper.SetDefault("session_refresh_token_expiry", "4320h")
-	viper.SetDefault("cookie_secure", false)
+	viper.SetDefault("cookie_secure", true)
 
 	// Read from environment variables
 	viper.AutomaticEnv()
@@ -199,16 +199,16 @@ func loadConfig() *Config {
 	}
 
 	return &Config{
-		Port:                        viper.GetString("port"),
-		DatabaseURL:                 viper.GetString("database_url"),
-		RedisURL:                    viper.GetString("redis_url"),
-		Issuer:                      viper.GetString("issuer"),
-		AccessTokenExpiry:           accessTokenExpiry,
-		RefreshTokenExpiry:          refreshTokenExpiry,
-		AuthorizationCodeExpiry:     authorizationCodeExpiry,
-		SessionTokenExpiry:          sessionTokenExpiry,
-		SessionRefreshTokenExpiry:   sessionRefreshTokenExpiry,
-		CookieSecure:                viper.GetBool("cookie_secure"),
+		Port:                      viper.GetString("port"),
+		DatabaseURL:               viper.GetString("database_url"),
+		RedisURL:                  viper.GetString("redis_url"),
+		Issuer:                    viper.GetString("issuer"),
+		AccessTokenExpiry:         accessTokenExpiry,
+		RefreshTokenExpiry:        refreshTokenExpiry,
+		AuthorizationCodeExpiry:   authorizationCodeExpiry,
+		SessionTokenExpiry:        sessionTokenExpiry,
+		SessionRefreshTokenExpiry: sessionRefreshTokenExpiry,
+		CookieSecure:              viper.GetBool("cookie_secure"),
 	}
 }
 

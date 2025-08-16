@@ -21,7 +21,8 @@ func NewRouter(authHandler *handler.AuthHandler) *chi.Mux {
 	// CORS middleware for browser-based clients and Swagger UI
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Origin", "http://localhost:9002")
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD")
 			w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-CSRF-Token, X-Requested-With, Origin")
 			w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Type")
