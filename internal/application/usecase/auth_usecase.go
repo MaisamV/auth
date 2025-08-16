@@ -60,10 +60,11 @@ type RegisterUserRequest struct {
 
 // RegisterUserResponse represents the response after user registration
 type RegisterUserResponse struct {
-	UserID              string `json:"user_id"`
-	Email               string `json:"email"`
-	SessionToken        string `json:"session_token"`
-	SessionRefreshToken string `json:"session_refresh_token"`
+	UserID                    string `json:"user_id"`
+	Email                     string `json:"email"`
+	SessionToken              string `json:"session_token"`
+	SessionRefreshToken       string `json:"session_refresh_token"`
+	SessionTokenExpiresAt     string `json:"session_token_expires_at"`
 }
 
 // LoginUserRequest represents the request to login a user
@@ -74,10 +75,11 @@ type LoginUserRequest struct {
 
 // LoginUserResponse represents the response after user login
 type LoginUserResponse struct {
-	UserID              string `json:"user_id"`
-	Email               string `json:"email"`
-	SessionToken        string `json:"session_token"`
-	SessionRefreshToken string `json:"session_refresh_token"`
+	UserID                    string `json:"user_id"`
+	Email                     string `json:"email"`
+	SessionToken              string `json:"session_token"`
+	SessionRefreshToken       string `json:"session_refresh_token"`
+	SessionTokenExpiresAt     string `json:"session_token_expires_at"`
 }
 
 // LoginUser authenticates a user with email and password
@@ -99,14 +101,14 @@ func (uc *AuthUseCase) LoginUser(ctx context.Context, req LoginUserRequest) (*Lo
 		return nil, fmt.Errorf("invalid credentials")
 	}
 
-	// Generate session token (1 hour expiry)
-	sessionToken, err := uc.tokenService.GenerateSessionToken(user.ID, 1*time.Hour)
+	// Generate session token
+	sessionToken, err := uc.tokenService.GenerateSessionToken(user.ID, uc.tokenService.GetSessionTokenExpiry())
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate session token: %w", err)
 	}
 
 	// Generate session refresh token entity
-	sessionRefreshTokenEntity, err := uc.tokenService.GenerateSessionRefreshToken(user.ID)
+	sessionRefreshTokenEntity, err := uc.tokenService.GenerateSessionRefreshToken(user.ID, uc.tokenService.GetSessionRefreshTokenExpiry())
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate session refresh token: %w", err)
 	}
@@ -127,11 +129,15 @@ func (uc *AuthUseCase) LoginUser(ctx context.Context, req LoginUserRequest) (*Lo
 		return nil, fmt.Errorf("failed to save session refresh token: %w", err)
 	}
 
+	// Calculate session token expiration time
+	sessionTokenExpiresAt := time.Now().UTC().Add(uc.tokenService.GetSessionTokenExpiry())
+
 	return &LoginUserResponse{
-		UserID:              user.ID,
-		Email:               user.Email.String(),
-		SessionToken:        sessionToken,
-		SessionRefreshToken: sessionRefreshToken,
+		UserID:                    user.ID,
+		Email:                     user.Email.String(),
+		SessionToken:              sessionToken,
+		SessionRefreshToken:       sessionRefreshToken,
+		SessionTokenExpiresAt:     sessionTokenExpiresAt.Format(time.RFC3339),
 	}, nil
 }
 
@@ -167,14 +173,14 @@ func (uc *AuthUseCase) RegisterUser(ctx context.Context, req RegisterUserRequest
 		return nil, fmt.Errorf("failed to save user: %w", err)
 	}
 
-	// Generate session token (1 hour expiry)
-	sessionToken, err := uc.tokenService.GenerateSessionToken(user.ID, 1*time.Hour)
+	// Generate session token
+	sessionToken, err := uc.tokenService.GenerateSessionToken(user.ID, uc.tokenService.GetSessionTokenExpiry())
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate session token: %w", err)
 	}
 
 	// Generate session refresh token entity
-	sessionRefreshTokenEntity, err := uc.tokenService.GenerateSessionRefreshToken(user.ID)
+	sessionRefreshTokenEntity, err := uc.tokenService.GenerateSessionRefreshToken(user.ID, uc.tokenService.GetSessionRefreshTokenExpiry())
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate session refresh token: %w", err)
 	}
@@ -195,11 +201,15 @@ func (uc *AuthUseCase) RegisterUser(ctx context.Context, req RegisterUserRequest
 		return nil, fmt.Errorf("failed to save session refresh token: %w", err)
 	}
 
+	// Calculate session token expiration time
+	sessionTokenExpiresAt := time.Now().UTC().Add(uc.tokenService.GetSessionTokenExpiry())
+
 	return &RegisterUserResponse{
-		UserID:              user.ID,
-		Email:               user.Email.String(),
-		SessionToken:        sessionToken,
-		SessionRefreshToken: sessionRefreshToken,
+		UserID:                    user.ID,
+		Email:                     user.Email.String(),
+		SessionToken:              sessionToken,
+		SessionRefreshToken:       sessionRefreshToken,
+		SessionTokenExpiresAt:     sessionTokenExpiresAt.Format(time.RFC3339),
 	}, nil
 }
 
@@ -268,7 +278,7 @@ func (uc *AuthUseCase) Authorize(ctx context.Context, req AuthorizeRequest) (*Au
 		req.CodeChallenge,
 		req.CodeChallengeMethod,
 		scopes,
-		10*time.Minute, // Authorization codes expire in 10 minutes
+		uc.tokenService.GetAuthorizationCodeExpiry(),
 	)
 
 	// Save authorization code
@@ -482,7 +492,7 @@ func (uc *AuthUseCase) generateTokens(ctx context.Context, userID, clientID stri
 		userID,
 		clientID,
 		scopes,
-		15*time.Minute, // Access tokens expire in 15 minutes
+		uc.tokenService.GetAccessTokenExpiry(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
@@ -500,7 +510,7 @@ func (uc *AuthUseCase) generateTokens(ctx context.Context, userID, clientID stri
 		clientID,
 		userID,
 		scopes,
-		30*24*time.Hour, // Refresh tokens expire in 30 days
+		uc.tokenService.GetRefreshTokenExpiry(),
 	)
 
 	if err := uc.refreshTokenRepo.Save(ctx, refreshToken); err != nil {
@@ -510,7 +520,7 @@ func (uc *AuthUseCase) generateTokens(ctx context.Context, userID, clientID stri
 	return &TokenResponse{
 		AccessToken:  accessToken,
 		TokenType:    "Bearer",
-		ExpiresIn:    900, // 15 minutes
+		ExpiresIn:    int64(uc.tokenService.GetAccessTokenExpiry().Seconds()),
 		RefreshToken: refreshTokenStr,
 		Scope:        joinScopes(scopes),
 	}, nil
@@ -570,8 +580,9 @@ type RefreshSessionTokenRequest struct {
 
 // RefreshSessionTokenResponse represents the response after refreshing a session token
 type RefreshSessionTokenResponse struct {
-	SessionToken        string `json:"session_token"`
-	SessionRefreshToken string `json:"session_refresh_token"`
+	SessionToken              string `json:"session_token"`
+	SessionRefreshToken       string `json:"session_refresh_token"`
+	SessionTokenExpiresAt     string `json:"session_token_expires_at"`
 }
 
 // RefreshSessionToken refreshes a session token using a refresh token
@@ -612,14 +623,14 @@ func (uc *AuthUseCase) RefreshSessionToken(ctx context.Context, req RefreshSessi
 		return nil, fmt.Errorf("failed to update session refresh token: %w", err)
 	}
 
-	// Generate new session token (1 hour expiry)
-	newSessionToken, err := uc.tokenService.GenerateSessionToken(userID, 1*time.Hour)
+	// Generate new session token
+	newSessionToken, err := uc.tokenService.GenerateSessionToken(userID, uc.tokenService.GetSessionTokenExpiry())
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate new session token: %w", err)
 	}
 
 	// Generate new session refresh token entity
-	newSessionRefreshTokenEntity, err := uc.tokenService.GenerateSessionRefreshToken(userID)
+	newSessionRefreshTokenEntity, err := uc.tokenService.GenerateSessionRefreshToken(userID, uc.tokenService.GetSessionRefreshTokenExpiry())
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate new session refresh token: %w", err)
 	}
@@ -640,9 +651,13 @@ func (uc *AuthUseCase) RefreshSessionToken(ctx context.Context, req RefreshSessi
 		return nil, fmt.Errorf("failed to save new session refresh token: %w", err)
 	}
 
+	// Calculate session token expiration time
+	sessionTokenExpiresAt := time.Now().UTC().Add(uc.tokenService.GetSessionTokenExpiry())
+
 	return &RefreshSessionTokenResponse{
-		SessionToken:        newSessionToken,
-		SessionRefreshToken: newSessionRefreshToken,
+		SessionToken:              newSessionToken,
+		SessionRefreshToken:       newSessionRefreshToken,
+		SessionTokenExpiresAt:     sessionTokenExpiresAt.Format(time.RFC3339),
 	}, nil
 }
 
