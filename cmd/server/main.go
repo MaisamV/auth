@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -41,10 +42,10 @@ func main() {
 	redisClient := initRedis(config.RedisURL)
 	defer redisClient.Close()
 
-	// Load ECDSA private key from file
-	privateKey, err := loadPrivateKeyFromFile("keys/jwt-private.pem")
+	// Load Ed25519 private key from file
+	privateKey, err := loadPrivateKeyFromFile("keys/jwt-ed25519-private.pem")
 	if err != nil {
-		log.Fatalf("Failed to load private key from file: %v\nPlease run 'go run cmd/keygen/main.go' to generate keys first", err)
+		log.Fatalf("Failed to load Ed25519 private key from file: %v\nPlease run 'go run cmd/keygen-ed25519/main.go' to generate Ed25519 keys first", err)
 	}
 
 	// Initialize repositories
@@ -255,7 +256,7 @@ func initRedis(redisURL string) *redis.Client {
 	return client
 }
 
-// loadPrivateKeyFromFile loads an ECDSA private key from a PEM file
+// loadPrivateKeyFromFile loads an Ed25519 private key from a PEM file
 func loadPrivateKeyFromFile(keyPath string) (string, error) {
 	// Read the private key file
 	keyData, err := os.ReadFile(keyPath)
@@ -274,10 +275,15 @@ func loadPrivateKeyFromFile(keyPath string) (string, error) {
 		return "", fmt.Errorf("invalid key type: expected 'PRIVATE KEY', got '%s'", block.Type)
 	}
 
-	// Parse the private key to validate it
-	_, err = x509.ParsePKCS8PrivateKey(block.Bytes)
+	// Parse the private key to validate it's Ed25519
+	parsedKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse private key: %w", err)
+	}
+
+	// Verify it's an Ed25519 private key
+	if _, ok := parsedKey.(ed25519.PrivateKey); !ok {
+		return "", fmt.Errorf("private key is not Ed25519")
 	}
 
 	return string(keyData), nil

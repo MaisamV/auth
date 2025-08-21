@@ -445,17 +445,14 @@ paths:
                           example: "1"
                         alg:
                           type: string
-                          example: ES256
+                          example: EdDSA
                         crv:
                           type: string
-                          example: P-256
-                          description: ECDSA curve name
+                          example: Ed25519
+                          description: Ed25519 curve name
                         x:
                           type: string
-                          description: ECDSA public key x coordinate (base64url encoded)
-                        y:
-                          type: string
-                          description: ECDSA public key y coordinate (base64url encoded)
+                          description: Ed25519 public key (base64url encoded)
 
 components:
   securitySchemes:

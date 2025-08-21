@@ -1,7 +1,7 @@
 package services
 
 import (
-	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
@@ -15,10 +15,10 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// JWTTokenService implements the TokenService interface using JWT
+// JWTTokenService implements the TokenService interface using JWT with Ed25519
 type JWTTokenService struct {
-	privateKey                *ecdsa.PrivateKey
-	publicKey                 *ecdsa.PublicKey
+	privateKey                ed25519.PrivateKey
+	publicKey                 ed25519.PublicKey
 	issuer                    string
 	accessTokenExpiry         time.Duration
 	refreshTokenExpiry        time.Duration
@@ -27,7 +27,7 @@ type JWTTokenService struct {
 	sessionRefreshTokenExpiry time.Duration
 }
 
-// NewJWTTokenService creates a new JWTTokenService
+// NewJWTTokenService creates a new JWT token service with Ed25519
 func NewJWTTokenService(privateKeyPEM, issuer string, accessTokenExpiry, refreshTokenExpiry, authorizationCodeExpiry, sessionTokenExpiry, sessionRefreshTokenExpiry time.Duration) (service.TokenService, error) {
 	// Parse private key
 	block, _ := pem.Decode([]byte(privateKeyPEM))
@@ -35,34 +35,24 @@ func NewJWTTokenService(privateKeyPEM, issuer string, accessTokenExpiry, refresh
 		return nil, fmt.Errorf("failed to decode PEM block")
 	}
 
-	// Try PKCS8 format first (recommended for ECDSA)
+	// Parse as PKCS8 private key
 	parsedKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {
-		// Try EC private key format
-		privateKey, err := x509.ParseECPrivateKey(block.Bytes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse private key: %w", err)
-		}
-		return &JWTTokenService{
-			privateKey:                privateKey,
-			publicKey:                 &privateKey.PublicKey,
-			issuer:                    issuer,
-			accessTokenExpiry:         accessTokenExpiry,
-			refreshTokenExpiry:        refreshTokenExpiry,
-			authorizationCodeExpiry:   authorizationCodeExpiry,
-			sessionTokenExpiry:        sessionTokenExpiry,
-			sessionRefreshTokenExpiry: sessionRefreshTokenExpiry,
-		}, nil
+		return nil, fmt.Errorf("failed to parse PKCS8 private key: %w", err)
 	}
 
-	privateKey, ok := parsedKey.(*ecdsa.PrivateKey)
+	// Assert to Ed25519 private key
+	privateKey, ok := parsedKey.(ed25519.PrivateKey)
 	if !ok {
-		return nil, fmt.Errorf("private key is not ECDSA")
+		return nil, fmt.Errorf("private key is not Ed25519")
 	}
+
+	// Extract public key from private key
+	publicKey := privateKey.Public().(ed25519.PublicKey)
 
 	return &JWTTokenService{
 		privateKey:                privateKey,
-		publicKey:                 &privateKey.PublicKey,
+		publicKey:                 publicKey,
 		issuer:                    issuer,
 		accessTokenExpiry:         accessTokenExpiry,
 		refreshTokenExpiry:        refreshTokenExpiry,
@@ -95,7 +85,7 @@ func (s *JWTTokenService) GenerateAccessToken(userID, clientID string, scopes []
 	}
 
 	// Create token
-	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
 
 	// Sign token
 	tokenString, err := token.SignedString(s.privateKey)
@@ -111,7 +101,7 @@ func (s *JWTTokenService) ValidateAccessToken(tokenString string) (*service.Toke
 	// Parse token
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		// Validate signing method
-		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
+		if _, ok := token.Method.(*jwt.SigningMethodEd25519); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return s.publicKey, nil
@@ -198,7 +188,7 @@ func (s *JWTTokenService) GenerateSessionToken(userID string, expiresIn time.Dur
 	}
 
 	// Create token
-	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
 
 	// Sign token
 	tokenString, err := token.SignedString(s.privateKey)
@@ -214,7 +204,7 @@ func (s *JWTTokenService) ValidateSessionToken(tokenString string) (string, erro
 	// Parse token
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		// Validate signing method
-		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
+		if _, ok := token.Method.(*jwt.SigningMethodEd25519); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return s.publicKey, nil
@@ -273,7 +263,7 @@ func (s *JWTTokenService) GenerateSessionRefreshTokenJWT(session *entity.Session
 	}
 
 	// Create token
-	tokenJwt := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	tokenJwt := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
 
 	// Sign token
 	tokenString, err := tokenJwt.SignedString(s.privateKey)
@@ -289,7 +279,7 @@ func (s *JWTTokenService) ValidateSessionRefreshToken(tokenString string) (strin
 	// Parse token
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		// Validate signing method
-		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
+		if _, ok := token.Method.(*jwt.SigningMethodEd25519); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return s.publicKey, nil

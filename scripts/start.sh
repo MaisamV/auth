@@ -1,12 +1,12 @@
 #!/bin/sh
 
-# Check if private key exists, if not generate keys
-if [ ! -f "keys/jwt-private.pem" ]; then
-    echo "🔑 JWT keys not found, generating new key pair..."
-    ./keygen
-    echo "✅ JWT keys generated successfully!"
+# Check if Ed25519 private key exists, if not generate keys
+if [ ! -f "keys/jwt-ed25519-private.pem" ]; then
+    echo "🔑 Ed25519 JWT keys not found, generating new key pair..."
+    ./keygen-ed25519
+    echo "✅ Ed25519 JWT keys generated successfully!"
 else
-    echo "🔑 JWT keys found, using existing keys"
+    echo "🔑 Ed25519 JWT keys found, using existing keys"
 fi
 
 # Start the main application
