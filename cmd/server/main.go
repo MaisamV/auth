@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -45,7 +47,7 @@ func main() {
 	// Load Ed25519 private key from file
 	privateKey, err := loadPrivateKeyFromFile("keys/jwt-ed25519-private.pem")
 	if err != nil {
-		log.Fatalf("Failed to load Ed25519 private key from file: %v\nPlease run 'go run cmd/keygen-ed25519/main.go' to generate Ed25519 keys first", err)
+		log.Fatalf("Failed to load Ed25519 private key: %v. Please run keygen-ed25519 to generate keys.", err)
 	}
 
 	// Initialize repositories
@@ -287,4 +289,59 @@ func loadPrivateKeyFromFile(keyPath string) (string, error) {
 	}
 
 	return string(keyData), nil
+}
+
+func generateEd25519KeyPair(privateKeyPath string) (string, error) {
+	// Create keys directory if it doesn't exist
+	keysDir := filepath.Dir(privateKeyPath)
+	if err := os.MkdirAll(keysDir, 0700); err != nil {
+		return "", fmt.Errorf("failed to create keys directory: %w", err)
+	}
+
+	// Generate Ed25519 key pair
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate Ed25519 key pair: %w", err)
+	}
+
+	// Marshal private key to PKCS8 format
+	privateKeyBytes, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal private key: %w", err)
+	}
+
+	// Create PEM block for private key
+	privateKeyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "PRIVATE KEY",
+		Bytes: privateKeyBytes,
+	})
+
+	// Marshal public key to PKIX format
+	publicKeyBytes, err := x509.MarshalPKIXPublicKey(publicKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal public key: %w", err)
+	}
+
+	// Create PEM block for public key
+	publicKeyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: publicKeyBytes,
+	})
+
+	// Write private key to file
+	if err := os.WriteFile(privateKeyPath, privateKeyPEM, 0600); err != nil {
+		return "", fmt.Errorf("failed to write private key: %w", err)
+	}
+
+	// Write public key to file
+	publicKeyPath := filepath.Join(keysDir, "jwt-ed25519-public.pem")
+	if err := os.WriteFile(publicKeyPath, publicKeyPEM, 0644); err != nil {
+		return "", fmt.Errorf("failed to write public key: %w", err)
+	}
+
+	log.Printf("✅ Ed25519 JWT key pair generated successfully!")
+	log.Printf("📁 Private key: %s", privateKeyPath)
+	log.Printf("📁 Public key: %s", publicKeyPath)
+
+	return string(privateKeyPEM), nil
 }

@@ -1,10 +1,9 @@
 #!/bin/sh
 
-# Check if Ed25519 private key exists, if not generate keys
+# Check if Ed25519 private key exists
 if [ ! -f "keys/jwt-ed25519-private.pem" ]; then
-    echo "🔑 Ed25519 JWT keys not found, generating new key pair..."
+    echo "🔑 Ed25519 JWT keys not found, generating new keys..."
     ./keygen-ed25519
-    echo "✅ Ed25519 JWT keys generated successfully!"
 else
     echo "🔑 Ed25519 JWT keys found, using existing keys"
 fi

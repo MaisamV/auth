@@ -16,11 +16,17 @@ RUN go mod download
 # Copy source code
 COPY . .
 
+# Create keys directory in build stage
+RUN mkdir -p keys
+
 # Build the main application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main cmd/server/main.go
 
 # Build the keygen utility
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o keygen cmd/keygen/main.go
+
+# Build the keygen-ed25519 utility
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o keygen-ed25519 cmd/keygen-ed25519/main.go
 
 # Final stage
 FROM alpine:latest
@@ -37,6 +43,7 @@ WORKDIR /app
 # Copy binaries from builder stage
 COPY --from=builder /app/main .
 COPY --from=builder /app/keygen .
+COPY --from=builder /app/keygen-ed25519 .
 
 # Copy configuration files
 COPY --from=builder /app/configs ./configs
@@ -47,11 +54,8 @@ COPY --from=builder /app/api ./api
 # Copy startup script
 COPY --from=builder /app/scripts ./scripts
 
-# Copy keys folder from builder stage if it exists
-COPY --from=builder /app/keys ./keys/
-
-# Create keys directory (in case keys folder doesn't exist)
-RUN mkdir -p keys
+# Copy keys folder from builder stage (includes any existing keys)
+COPY --from=builder /app/keys ./keys
 
 # Make startup script executable
 RUN chmod +x scripts/start.sh
